@@ -472,27 +472,79 @@ function drawObstacle(o) {
 
 function drawManhole(x, y, s, d) {
   const rx = 46*s, ry = 16*s;
-  // bueiro (buraco no chão)
   ctx.save();
+
+  // bueiro (buraco no chão)
   ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI*2);
   ctx.fillStyle = '#0c0c10'; ctx.fill();
   ctx.strokeStyle = '#4a4a52'; ctx.lineWidth = Math.max(1, 3*s); ctx.stroke();
 
-  // jacaré espiando de dentro do buraco (olhos + focinho)
+  // só a boca do jacaré aparece saindo do buraco (sem corpo, sem olhos)
   const bob = Math.sin(time*3 + d) * 2*s;
-  ctx.fillStyle = '#3a7d3a';
-  ctx.beginPath();
-  ctx.ellipse(x, y - 2*s + bob, rx*0.62, ry*0.55, 0, 0, Math.PI*2);
-  ctx.fill();
-  ctx.fillStyle = '#2a5d2a';
-  ctx.fillRect(x - rx*0.5, y - 3*s + bob, rx, ry*0.35);
-  // olhos
-  ctx.fillStyle = '#ffd23f';
-  ctx.beginPath(); ctx.arc(x - rx*0.28, y - ry*0.5 + bob, 3*s, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + rx*0.28, y - ry*0.5 + bob, 3*s, 0, Math.PI*2); ctx.fill();
+  const by = y - 2*s + bob;       // base da boca, na borda do buraco
+  const jawLen = ry*3.6;          // o quanto o focinho sobe pra fora
+  const jawW = rx*0.62;           // largura da boca
+  const topY = by - jawLen*0.62;  // onde a boca fecha, na ponta do focinho
+
+  // mandíbula de cima (focinho comprido, verde escuro)
+  poly([
+    [x - jawW, by],
+    [x - jawW*0.55, by - jawLen*0.78],
+    [x - jawW*0.22, by - jawLen],
+    [x + jawW*0.22, by - jawLen],
+    [x + jawW*0.55, by - jawLen*0.78],
+    [x + jawW, by]
+  ], '#2f6b32', '#173b19');
+
+  // escamas ao longo do focinho
+  ctx.fillStyle = '#245526';
+  ctx.beginPath(); ctx.ellipse(x - jawW*0.28, by - jawLen*0.55, jawW*0.09, jawW*0.06, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x + jawW*0.28, by - jawLen*0.55, jawW*0.09, jawW*0.06, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x, by - jawLen*0.35, jawW*0.09, jawW*0.06, 0, 0, Math.PI*2); ctx.fill();
+
+  // narinas na ponta do focinho
   ctx.fillStyle = '#111';
-  ctx.beginPath(); ctx.arc(x - rx*0.28, y - ry*0.5 + bob, 1.2*s, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + rx*0.28, y - ry*0.5 + bob, 1.2*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x - jawW*0.13, by - jawLen*0.94, 2.2*s, 3*s, -0.3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x + jawW*0.13, by - jawLen*0.94, 2.2*s, 3*s, 0.3, 0, Math.PI*2); ctx.fill();
+
+  // mandíbula de baixo (mais curta e clara, dentro do buraco)
+  poly([
+    [x - jawW*0.95, by + ry*0.35],
+    [x - jawW*0.42, by - jawLen*0.34],
+    [x + jawW*0.42, by - jawLen*0.34],
+    [x + jawW*0.95, by + ry*0.35]
+  ], '#3f7a42', '#1c4a1f');
+
+  // interior da boca (vermelho, entre as duas mandíbulas)
+  poly([
+    [x - jawW*0.42, by],
+    [x - jawW*0.34, topY],
+    [x + jawW*0.34, topY],
+    [x + jawW*0.42, by]
+  ], '#7a1f1f');
+
+  // dentes descendo da mandíbula de cima
+  ctx.fillStyle = '#fdfdf4';
+  for (let i = 0; i < 5; i++) {
+    const t = i/4;
+    const tx = x - jawW*0.3 + jawW*0.6*t;
+    ctx.beginPath();
+    ctx.moveTo(tx - 3*s, topY);
+    ctx.lineTo(tx + 3*s, topY);
+    ctx.lineTo(tx, topY + 8*s);
+    ctx.closePath(); ctx.fill();
+  }
+  // dentes subindo da mandíbula de baixo
+  for (let i = 0; i < 4; i++) {
+    const t = i/3;
+    const tx = x - jawW*0.36 + jawW*0.72*t;
+    ctx.beginPath();
+    ctx.moveTo(tx - 3*s, by);
+    ctx.lineTo(tx + 3*s, by);
+    ctx.lineTo(tx, by - 8*s);
+    ctx.closePath(); ctx.fill();
+  }
+
   ctx.restore();
 }
 
