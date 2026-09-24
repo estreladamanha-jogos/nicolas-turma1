@@ -53,14 +53,14 @@
 <div id="wrap">
   <div id="hud">
     <div class="stat">🪙 <b id="coinVal">0</b></div>
-    <div class="stat">❤️ <b id="livesVal">3</b></div>
+    <div class="stat" id="livesDisplay">❤️❤️❤️</div>
     <div id="progress"><div id="progressFill"></div><div id="progressIcon">🛹</div></div>
     <div class="stat">🏁 <b id="pctVal">0</b>%</div>
   </div>
 
   <canvas id="game" width="900" height="500"></canvas>
 
-  <div id="hint">← → trocar de pista · ↑ ou ESPAÇO pular · pule o jacaré, desvie do ônibus · junte moedas 🛹</div>
+  <div id="hint">← → trocar de pista · ↑ ou ESPAÇO pular · pule o jacaré, desvie do ônibus · você tem 3 vidas 🛹</div>
 
   <div id="overlay">
     <h2 id="overlayTitle">🏁 CHEGOU!</h2>
@@ -110,10 +110,11 @@ function laneX(l, d) { return W/2 + (l-1) * LANE_W * sc(d); }
 function hash(n) { const x = Math.sin(n*127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
 
 // ---------- Skatista ----------
-const player = { lane: 1, targetLane: 1, jumpY: 0, vy: 0, onGround: true };
+const player = { lane: 1, targetLane: 1, jumpY: 0, vy: 0, onGround: true, invincible: 0 };
 const GRAVITY = 2300;
 const JUMP_SPEED = 800;
-const JUMP_CLEAR_HEIGHT = 30; // altura mínima pra "pular" o jacaré sem bater
+const JUMP_CLEAR_HEIGHT = 30;  // altura mínima pra "pular" o jacaré sem bater
+const INVINCIBLE_TIME = 1.5;   // segundos de invencibilidade piscando após levar um hit
 
 // ---------- Moedas ----------
 let coins = [];
@@ -175,6 +176,7 @@ function update(dt) {
   }
 
   if (hitFlash > 0) hitFlash = Math.max(0, hitFlash - dt * 2.2);
+  if (player.invincible > 0) player.invincible = Math.max(0, player.invincible - dt);
 
   for (const c of coins) {
     if (c.taken) continue;
@@ -193,13 +195,12 @@ function update(dt) {
       if (o.type === 'onibus') {
         // ônibus é alto: não dá pra pular por cima, só desviando de pista
         o.hit = true;
-        loseGame('💥 Você bateu no ônibus!');
-        return;
+        if (player.invincible <= 0) hitObstacle();
       } else {
         // jacaré no bueiro: pula por cima pra desviar
         if (player.jumpY < JUMP_CLEAR_HEIGHT) {
           o.hit = true;
-          loseLife();
+          if (player.invincible <= 0) hitObstacle();
         }
       }
     }
@@ -212,11 +213,18 @@ function update(dt) {
   if (distance >= TRACK_LENGTH) winGame();
 }
 
-function loseLife() {
+function updateHearts() {
+  const full = '❤️'.repeat(Math.max(0, lives));
+  const empty = '🤍'.repeat(Math.max(0, START_LIVES - lives));
+  document.getElementById('livesDisplay').textContent = full + empty;
+}
+
+function hitObstacle() {
   lives--;
-  document.getElementById('livesVal').textContent = Math.max(0, lives);
+  updateHearts();
   hitFlash = 1;
-  if (lives <= 0) loseGame('🐊 O jacaré pegou todas as suas vidas!');
+  player.invincible = INVINCIBLE_TIME;
+  if (lives <= 0) loseGame('Você é muito, jogue novamente.');
 }
 
 function winGame() {
@@ -241,11 +249,11 @@ function restart() {
   hitFlash = 0;
   gameOver = false;
   player.lane = player.targetLane = 1;
-  player.jumpY = 0; player.vy = 0; player.onGround = true;
+  player.jumpY = 0; player.vy = 0; player.onGround = true; player.invincible = 0;
   buildCoins();
   buildObstacles();
   document.getElementById('coinVal').textContent = 0;
-  document.getElementById('livesVal').textContent = lives;
+  updateHearts();
   document.getElementById('overlay').classList.remove('show');
 }
 
@@ -486,7 +494,7 @@ function drawManhole(x, y, s, d) {
   const jawW = rx*0.62;           // largura da boca
   const topY = by - jawLen*0.62;  // onde a boca fecha, na ponta do focinho
 
-  // mandíbula de cima (focinho comprido, verde escuro)
+  // mandíbula de cima (focinho comprido, verde oliva de jacaré)
   poly([
     [x - jawW, by],
     [x - jawW*0.55, by - jawLen*0.78],
@@ -494,13 +502,20 @@ function drawManhole(x, y, s, d) {
     [x + jawW*0.22, by - jawLen],
     [x + jawW*0.55, by - jawLen*0.78],
     [x + jawW, by]
-  ], '#2f6b32', '#173b19');
+  ], '#4a6b3a', '#22331b');
 
-  // escamas ao longo do focinho
-  ctx.fillStyle = '#245526';
-  ctx.beginPath(); ctx.ellipse(x - jawW*0.28, by - jawLen*0.55, jawW*0.09, jawW*0.06, 0, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(x + jawW*0.28, by - jawLen*0.55, jawW*0.09, jawW*0.06, 0, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(x, by - jawLen*0.35, jawW*0.09, jawW*0.06, 0, 0, Math.PI*2); ctx.fill();
+  // crista central do focinho
+  ctx.strokeStyle = '#33471f'; ctx.lineWidth = Math.max(1, 1.4*s);
+  ctx.beginPath(); ctx.moveTo(x, by - jawLen*0.05); ctx.lineTo(x, by - jawLen*0.96); ctx.stroke();
+
+  // escamas (osteodermas) em duas fileiras ao longo do focinho
+  ctx.fillStyle = '#3a5a2c';
+  for (let i = 0; i < 4; i++) {
+    const t = 0.22 + i*0.17;
+    const wgap = jawW*(0.34 - i*0.05);
+    ctx.beginPath(); ctx.ellipse(x - wgap, by - jawLen*t, jawW*0.08, jawW*0.055, 0.2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + wgap, by - jawLen*t, jawW*0.08, jawW*0.055, -0.2, 0, Math.PI*2); ctx.fill();
+  }
 
   // narinas na ponta do focinho
   ctx.fillStyle = '#111';
@@ -513,7 +528,7 @@ function drawManhole(x, y, s, d) {
     [x - jawW*0.42, by - jawLen*0.34],
     [x + jawW*0.42, by - jawLen*0.34],
     [x + jawW*0.95, by + ry*0.35]
-  ], '#3f7a42', '#1c4a1f');
+  ], '#5c7a48', '#2a3b1f');
 
   // interior da boca (vermelho, entre as duas mandíbulas)
   poly([
@@ -549,7 +564,7 @@ function drawManhole(x, y, s, d) {
 }
 
 function drawBus(x, y, s) {
-  const w = 150*s, h = 120*s, depth = 20*s;
+  const w = 160*s, h = 130*s, depth = 22*s;
   ctx.save();
   // sombra
   ctx.fillStyle = 'rgba(0,0,0,.3)';
@@ -560,28 +575,74 @@ function drawBus(x, y, s) {
   body.addColorStop(0, '#ffe066'); body.addColorStop(1, '#f5b700');
   ctx.fillStyle = body; ctx.strokeStyle = '#7a5900'; ctx.lineWidth = Math.max(1, 3*s);
   ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(x - w/2, y - h, w, h, 10*s); else ctx.rect(x - w/2, y - h, w, h);
+  if (ctx.roundRect) ctx.roundRect(x - w/2, y - h, w, h, 12*s); else ctx.rect(x - w/2, y - h, w, h);
   ctx.fill(); ctx.stroke();
+
+  // friso lateral
+  ctx.strokeStyle = '#c98a00'; ctx.lineWidth = Math.max(1, 3*s);
+  ctx.beginPath(); ctx.moveTo(x - w/2, y - h*0.28); ctx.lineTo(x + w/2, y - h*0.28); ctx.stroke();
+
+  // letreiro do destino, no topo
+  ctx.fillStyle = '#1c1230';
+  ctx.fillRect(x - w*0.3, y - h*0.98, w*0.6, h*0.14);
+  ctx.fillStyle = '#ffb703';
+  ctx.font = `bold ${Math.max(5, 9*s)}px 'Press Start 2P', monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('BAIRRO', x, y - h*0.87);
+  ctx.textAlign = 'left';
 
   // parabrisa
   ctx.fillStyle = '#a7d8ff';
-  ctx.fillRect(x - w*0.4, y - h*0.92, w*0.8, h*0.32);
+  ctx.fillRect(x - w*0.4, y - h*0.8, w*0.8, h*0.3);
   ctx.strokeStyle = '#5a5a66'; ctx.lineWidth = Math.max(1, 2*s);
-  ctx.beginPath(); ctx.moveTo(x, y - h*0.92); ctx.lineTo(x, y - h*0.6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, y - h*0.8); ctx.lineTo(x, y - h*0.5); ctx.stroke();
+
+  // limpadores de para-brisa
+  ctx.strokeStyle = '#222'; ctx.lineWidth = Math.max(1, 1.6*s); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - w*0.32, y - h*0.5); ctx.lineTo(x - w*0.1, y - h*0.55); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + w*0.32, y - h*0.5); ctx.lineTo(x + w*0.1, y - h*0.55); ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // espelhos retrovisores
+  ctx.fillStyle = '#3a3a44'; ctx.strokeStyle = '#1c1230'; ctx.lineWidth = Math.max(1, 1.4*s);
+  ctx.fillRect(x - w*0.58, y - h*0.62, w*0.08, h*0.09);
+  ctx.strokeRect(x - w*0.58, y - h*0.62, w*0.08, h*0.09);
+  ctx.fillRect(x + w*0.5, y - h*0.62, w*0.08, h*0.09);
+  ctx.strokeRect(x + w*0.5, y - h*0.62, w*0.08, h*0.09);
+
+  // grade frontal
+  ctx.strokeStyle = '#a06e00'; ctx.lineWidth = Math.max(1, 1.4*s);
+  for (let i = 0; i < 4; i++) {
+    const gy2 = y - h*0.14 + i*(h*0.03);
+    ctx.beginPath(); ctx.moveTo(x - w*0.3, gy2); ctx.lineTo(x + w*0.3, gy2); ctx.stroke();
+  }
 
   // faróis
-  ctx.fillStyle = '#fff6c8';
-  ctx.beginPath(); ctx.arc(x - w*0.38, y - h*0.2, depth*0.35, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + w*0.38, y - h*0.2, depth*0.35, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff6c8'; ctx.strokeStyle = '#7a5900'; ctx.lineWidth = Math.max(1, 1.4*s);
+  ctx.beginPath(); ctx.arc(x - w*0.38, y - h*0.18, depth*0.32, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x + w*0.38, y - h*0.18, depth*0.32, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+  // setas de direção
+  ctx.fillStyle = '#ff8c00';
+  ctx.beginPath(); ctx.arc(x - w*0.48, y - h*0.1, depth*0.16, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.48, y - h*0.1, depth*0.16, 0, Math.PI*2); ctx.fill();
 
   // para-choque
   ctx.fillStyle = '#4a4a52';
   ctx.fillRect(x - w/2, y - depth*0.4, w, depth*0.4);
 
+  // placa
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#333'; ctx.lineWidth = Math.max(1, 1*s);
+  ctx.fillRect(x - w*0.14, y - depth*0.32, w*0.28, depth*0.22);
+  ctx.strokeRect(x - w*0.14, y - depth*0.32, w*0.28, depth*0.22);
+
   // rodas
   ctx.fillStyle = '#1c1230';
-  ctx.beginPath(); ctx.arc(x - w*0.32, y + 2*s, 12*s, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + w*0.32, y + 2*s, 12*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x - w*0.32, y + 2*s, 13*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.32, y + 2*s, 13*s, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#999';
+  ctx.beginPath(); ctx.arc(x - w*0.32, y + 2*s, 5*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.32, y + 2*s, 5*s, 0, Math.PI*2); ctx.fill();
 
   ctx.restore();
 }
@@ -610,6 +671,9 @@ function drawFinish() {
 }
 
 function drawPlayer() {
+  // enquanto invencível, o skatista pisca (some a cada ~0,1s)
+  if (player.invincible > 0 && Math.floor(player.invincible * 10) % 2 === 0) return;
+
   const x = laneX(player.lane, 0);
   const jy = player.jumpY;
   const bob = player.onGround ? Math.sin(time*16) * 1.6 : 0;
