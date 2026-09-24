@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚔️ Viking Mar Afora — Jogo Modelo (Desafio 4)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --sky:#8fd3f4; --sky-low:#d6f0f5;
+    --sea-top:#2a8fb0; --sea-bottom:#063245;
+    --wood:#6b4226; --wood-dark:#4a2c1a;
+    --sail:#f0e6cc; --gold:#ffd23f; --gold-dark:#b8860b;
+    --viking-red:#c0392b; --viking-red-dark:#7a1f16;
+    --ink:#241812;
+  }
+  html,body {
+    width:100%; height:100%;
+    background: linear-gradient(180deg, var(--sky), var(--sky-low));
+    display:flex; align-items:center; justify-content:center;
+    font-family: 'Press Start 2P', monospace;
+    overflow:hidden;
+  }
+  #wrap {
+    position:relative;
+    width:900px; max-width:96vw;
+    filter: drop-shadow(0 10px 0 rgba(0,0,0,.3));
+  }
+  #hud {
+    position:absolute; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 18px;
+    background:linear-gradient(180deg, rgba(20,15,10,.85), rgba(20,15,10,0));
+    z-index:5; pointer-events:none;
+    font-size:13px; letter-spacing:1px;
+  }
+  #hud .stat { color:#fff; text-shadow:2px 2px 0 #000; }
+  #hud .stat b { color:var(--gold); font-size:15px; }
+  canvas {
+    display:block; width:100%; height:auto;
+    background:#0a3d52;
+    border:6px solid var(--ink);
+    border-radius:8px;
+    box-shadow: 0 0 0 3px var(--wood), 0 14px 0 rgba(0,0,0,.4);
+  }
+  #hint {
+    position:absolute; bottom:10px; left:0; right:0;
+    text-align:center; color:#fff; font-size:13px; letter-spacing:.3px;
+    font-family:-apple-system, Segoe UI, Arial, sans-serif; font-weight:bold;
+    text-shadow:2px 2px 0 #000;
+    pointer-events:none; z-index:5;
+  }
+  #overlay {
+    position:absolute; inset:0; display:none;
+    align-items:center; justify-content:center; flex-direction:column; gap:16px;
+    background:rgba(10,15,20,.85); border-radius:8px; z-index:10;
+    text-align:center; padding:20px;
+  }
+  #overlay.show { display:flex; }
+  #overlay h2 {
+    font-size:22px; color:var(--gold); text-shadow:3px 3px 0 #000;
+    letter-spacing:2px;
+  }
+  #overlay p { color:#fff; font-size:12px; max-width:480px; line-height:2; text-shadow:2px 2px 0 #000; }
+  #overlay button {
+    margin-top:6px; padding:14px 26px; font-size:12px; font-family:'Press Start 2P', monospace;
+    background:var(--viking-red); color:#fff;
+    border:3px solid var(--ink); border-radius:6px; cursor:pointer; letter-spacing:1px;
+    box-shadow:0 5px 0 var(--viking-red-dark);
+  }
+  #overlay button:active { box-shadow:0 2px 0 var(--viking-red-dark); transform:translateY(3px); }
+</style>
+</head>
+<body>
+
+<div id="wrap">
+  <div id="hud">
+    <div class="stat">🪙 TESOUROS: <b id="goldVal">0</b>/<span id="goldTotal">0</span></div>
+  </div>
+
+  <canvas id="game" width="900" height="500"></canvas>
+
+  <div id="hint">↑ ↓ ← → mover o barco · colete todos os tesouros ⚓</div>
+
+  <div id="overlay">
+    <h2 id="overlayTitle">⚔️ VOCÊ VENCEU!</h2>
+    <p id="overlayText">Você recolheu todos os tesouros vikings!</p>
+    <button onclick="restart()">🔄 JOGAR DE NOVO</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   VIKING MAR AFORA — jogo modelo do Desafio 4 (barco livre
+   pelo mar, SEM pulo e SEM plataforma — de propósito, pra
+   sentir diferente do jogo-modelo de plataforma). Base ainda
+   VAZIA: barco, controle e objetivo já funcionam (Elemento
+   Principal + Controle + Objetivo, das aulas 2/3/4), mas
+   ainda não tem obstáculo, cenário com identidade (aqui é
+   sempre o mesmo dia claro) nem poder especial — isso é o
+   Desafio 4, pra turma construir em cima deste arquivo,
+   cada um na sua própria cópia.
+   ========================================================= */
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// ---------- Mundo ----------
+const LEVEL_WIDTH = 2600;
+const SEA_TOP = 70;
+const SEA_BOTTOM = 460;
+
+let cameraX = 0;
+let frame = 0;
+let gameOver = false;
+
+// ---------- Jogador (o Barco Viking) ----------
+const player = {
+  x: 60, y: 260, w: 50, h: 30,
+  vx: 0, vy: 0,
+  speed: 4.2,
+  facing: 1
+};
+
+// ---------- Tesouros (moedas de ouro) ----------
+let treasures = [];
+function buildTreasures() {
+  treasures = [
+    {x:150,y:160},{x:230,y:260},{x:300,y:380},
+    {x:420,y:150},{x:500,y:340},
+    {x:620,y:220},{x:700,y:400},
+    {x:820,y:170},{x:900,y:300},{x:990,y:410},
+    {x:1100,y:150},{x:1190,y:280},
+    {x:1320,y:380},{x:1420,y:200},{x:1520,y:130},
+    {x:1650,y:320},{x:1750,y:420},
+    {x:1880,y:160},{x:1980,y:280},{x:2080,y:380},
+    {x:2200,y:150},{x:2300,y:300},{x:2420,y:200},{x:2520,y:360},
+  ].map(t => ({...t, r:9, collected:false}));
+}
+buildTreasures();
+
+// ---------- Vila viking final (decoração de chegada) ----------
+const village = { x: LEVEL_WIDTH-160 };
+
+// ---------- Cenário decorativo (ainda neutro — sempre o mesmo dia claro) ----------
+const waveLines = Array.from({length:5}, (_, i) => ({
+  y: SEA_TOP + 30 + i*80, speed: 0.4 + i*0.15, offset: Math.random()*Math.PI*2
+}));
+const sparkles = Array.from({length:50}, () => ({
+  x: Math.random()*LEVEL_WIDTH, y: SEA_TOP + 15 + Math.random()*(SEA_BOTTOM-SEA_TOP-15), ph: Math.random()*Math.PI*2
+}));
+const clouds = Array.from({length:7}, () => ({
+  x: Math.random()*LEVEL_WIDTH*1.1, y: 18+Math.random()*38, s: 0.7+Math.random()*0.8, drift: 0.12+Math.random()*0.14
+}));
+const gulls = Array.from({length:5}, () => ({
+  x: Math.random()*LEVEL_WIDTH*1.1, y: 28+Math.random()*46, s: 0.7+Math.random()*0.5, ph: Math.random()*Math.PI*2, speed: 0.3+Math.random()*0.3
+}));
+let splashes = [];
+
+// ---------- Estado ----------
+let goldCount = 0;
+
+document.getElementById('goldTotal').textContent = treasures.length;
+
+// ---------- Input ----------
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ---------- Loop principal ----------
+function update() {
+  if (gameOver) return;
+  frame++;
+
+  // movimento livre (sem gravidade, sem pulo)
+  if (keys['ArrowLeft'])  { player.vx = -player.speed; player.facing = -1; }
+  else if (keys['ArrowRight']) { player.vx = player.speed; player.facing = 1; }
+  else player.vx *= 0.8;
+
+  if (keys['ArrowUp'])  player.vy = -player.speed;
+  else if (keys['ArrowDown']) player.vy = player.speed;
+  else player.vy *= 0.8;
+
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // limites do mundo (mar tem começo/fim e uma faixa de profundidade)
+  if (player.x < 10) player.x = 10;
+  if (player.x > LEVEL_WIDTH - player.w - 10) player.x = LEVEL_WIDTH - player.w - 10;
+  if (player.y < SEA_TOP) player.y = SEA_TOP;
+  if (player.y > SEA_BOTTOM - player.h) player.y = SEA_BOTTOM - player.h;
+
+  // rastro de espuma atrás do barco enquanto ele se move
+  if ((Math.abs(player.vx) > 0.5 || Math.abs(player.vy) > 0.5) && frame % 3 === 0) {
+    splashes.push({
+      x: player.x + player.w/2 - player.facing*player.w*0.55,
+      y: player.y + player.h*0.85,
+      vx: -player.vx*0.25 + (Math.random()-0.5)*1.2,
+      vy: (Math.random()-0.5)*1.2 - 0.3,
+      life: 1, r: 2.5+Math.random()*2.5
+    });
+  }
+  splashes.forEach(s => { s.x += s.vx; s.y += s.vy; s.life -= 0.035; });
+  splashes = splashes.filter(s => s.life > 0);
+
+  // tesouros
+  for (const t of treasures) {
+    if (t.collected) continue;
+    const dx = (player.x+player.w/2) - t.x, dy = (player.y+player.h/2) - t.y;
+    if (Math.sqrt(dx*dx+dy*dy) < t.r + 22) {
+      t.collected = true;
+      goldCount++;
+      updateHUD();
+      if (goldCount === treasures.length) winGame();
+    }
+  }
+
+  // câmera segue o barco
+  cameraX = Math.max(0, Math.min(player.x - W/2, LEVEL_WIDTH - W));
+}
+
+function updateHUD() {
+  document.getElementById('goldVal').textContent = goldCount;
+}
+
+function winGame() {
+  gameOver = true;
+  document.getElementById('overlayTitle').textContent = '⚔️ VOCÊ VENCEU!';
+  document.getElementById('overlayText').textContent =
+    `Você recolheu todos os ${treasures.length} tesouros vikings!`;
+  document.getElementById('overlay').classList.add('show');
+}
+
+function restart() {
+  player.x = 60; player.y = 260;
+  player.vx = 0; player.vy = 0;
+  goldCount = 0;
+  gameOver = false;
+  splashes = [];
+  buildTreasures();
+  document.getElementById('overlay').classList.remove('show');
+  updateHUD();
+}
+
+// ---------- Desenho ----------
+function drawCloud(x, y, s) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, 20*s, 12*s, 0, 0, Math.PI*2);
+  ctx.ellipse(x-16*s, y+3*s, 14*s, 9*s, 0, 0, Math.PI*2);
+  ctx.ellipse(x+16*s, y+3*s, 14*s, 9*s, 0, 0, Math.PI*2);
+  ctx.fill();
+}
+
+function drawGull(x, y, s, flap) {
+  ctx.beginPath();
+  ctx.moveTo(x-8*s, y+flap*s);
+  ctx.quadraticCurveTo(x-3*s, y-4*s, x, y);
+  ctx.quadraticCurveTo(x+3*s, y-4*s, x+8*s, y+flap*s);
+  ctx.stroke();
+}
+
+function drawBackground() {
+  const skyH = SEA_TOP + 10;
+
+  // ceu
+  const gSky = ctx.createLinearGradient(0,0,0,skyH);
+  gSky.addColorStop(0,'#8fd3f4');
+  gSky.addColorStop(1,'#d6f0f5');
+  ctx.fillStyle = gSky;
+  ctx.fillRect(0,0,W,skyH);
+
+  // sol com brilho suave (fixo na tela, dá profundidade sem competir com o resto)
+  const sunX = W-110, sunY = 58;
+  ctx.save();
+  const sunGlow = ctx.createRadialGradient(sunX,sunY,4,sunX,sunY,64);
+  sunGlow.addColorStop(0,'rgba(255,250,210,.85)');
+  sunGlow.addColorStop(1,'rgba(255,250,210,0)');
+  ctx.fillStyle = sunGlow;
+  ctx.fillRect(sunX-64,sunY-64,128,128);
+  ctx.fillStyle = '#fff8d6';
+  ctx.beginPath(); ctx.arc(sunX,sunY,15,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // nuvens (parallax + deriva propria = animação constante)
+  ctx.fillStyle = 'rgba(255,255,255,.88)';
+  for (const c of clouds) {
+    c.x += c.drift;
+    if (c.x - cameraX*0.2 > LEVEL_WIDTH*1.15) c.x = -100;
+    const cx = c.x - cameraX*0.2;
+    if (cx+60 < 0 || cx-60 > W) continue;
+    drawCloud(cx, c.y, c.s);
+  }
+
+  // gaivotas voando
+  ctx.strokeStyle = 'rgba(50,55,65,.65)';
+  ctx.lineWidth = 1.6;
+  for (const g of gulls) {
+    g.x += g.speed;
+    if (g.x - cameraX*0.3 > LEVEL_WIDTH*1.15) g.x = -50;
+    const gx = g.x - cameraX*0.3;
+    if (gx < -20 || gx > W+20) continue;
+    const flap = Math.sin(frame*0.15 + g.ph) * 4;
+    drawGull(gx, g.y, g.s, flap);
+  }
+
+  // mar (gradiente com mais profundidade)
+  const gSea = ctx.createLinearGradient(0,skyH,0,H);
+  gSea.addColorStop(0,'#2a8fb0');
+  gSea.addColorStop(0.45,'#136d8c');
+  gSea.addColorStop(1,'#063245');
+  ctx.fillStyle = gSea;
+  ctx.fillRect(0,skyH,W,H-skyH);
+
+  // brilho do sol refletido na agua
+  ctx.save();
+  ctx.globalAlpha = .1;
+  const glareG = ctx.createLinearGradient(sunX-45,skyH,sunX+45,H);
+  glareG.addColorStop(0,'#fff8d6');
+  glareG.addColorStop(1,'rgba(255,248,214,0)');
+  ctx.fillStyle = glareG;
+  ctx.fillRect(sunX-55,skyH,110,H-skyH);
+  ctx.restore();
+
+  // brilhos/sparkles na superficie
+  for (const sp of sparkles) {
+    const sx = sp.x - cameraX;
+    if (sx < -5 || sx > W+5) continue;
+    const tw = 0.5 + 0.5*Math.sin(frame*0.07 + sp.ph);
+    ctx.globalAlpha = tw * 0.45;
+    ctx.fillStyle = '#eaffff';
+    ctx.beginPath(); ctx.arc(sx, sp.y, 1.3, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // ondas em camadas, com crista clara + sombra (efeito de volume)
+  for (const wl of waveLines) {
+    ctx.beginPath();
+    for (let px = 0; px <= W; px += 16) {
+      const worldX = px + cameraX;
+      const wy = wl.y + Math.sin(worldX*0.02 + frame*0.02*wl.speed + wl.offset) * 6;
+      if (px === 0) ctx.moveTo(px, wy); else ctx.lineTo(px, wy);
+    }
+    ctx.strokeStyle = 'rgba(0,0,0,.14)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.beginPath();
+    for (let px = 0; px <= W; px += 16) {
+      const worldX = px + cameraX;
+      const wy = wl.y - 2 + Math.sin(worldX*0.02 + frame*0.02*wl.speed + wl.offset) * 6;
+      if (px === 0) ctx.moveTo(px, wy); else ctx.lineTo(px, wy);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+function drawSplashes() {
+  for (const s of splashes) {
+    const x = s.x - cameraX;
+    if (x < -10 || x > W+10) continue;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, s.life) * 0.6;
+    ctx.fillStyle = '#eafcff';
+    ctx.beginPath();
+    ctx.arc(x, s.y, s.r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawTreasure(t) {
+  if (t.collected) return;
+  const x = t.x - cameraX;
+  if (x < -20 || x > W+20) return;
+  const bob = Math.sin(frame*0.1 + t.x) * 3;
+  const shine = ((frame*1.5 + t.x*3) % 240) / 240;
+  ctx.save();
+  ctx.translate(x, t.y+bob);
+  ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = 12;
+  const coinG = ctx.createRadialGradient(-3,-3,1, 0,0, t.r+2);
+  coinG.addColorStop(0,'#fff6c8');
+  coinG.addColorStop(0.5,'#ffd23f');
+  coinG.addColorStop(1,'#b8860b');
+  ctx.fillStyle = coinG;
+  ctx.strokeStyle = '#8a6300';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, t.r, 0, Math.PI*2);
+  ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(138,99,0,.7)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(0,-t.r*0.5); ctx.lineTo(0,t.r*0.5);
+  ctx.moveTo(-t.r*0.35,-t.r*0.2); ctx.lineTo(t.r*0.35,t.r*0.2);
+  ctx.stroke();
+  // brilho passando (sparkle sweep)
+  ctx.save();
+  ctx.clip();
+  ctx.globalAlpha = .55;
+  ctx.fillStyle = '#fff';
+  const sx = -t.r*2 + shine*t.r*4;
+  ctx.beginPath();
+  ctx.ellipse(sx, 0, 2.4, t.r*1.1, 0.5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawVillage() {
+  const x = village.x - cameraX;
+  if (x < -100 || x > W+100) return;
+  ctx.save();
+  // brilho quente por tras da vila
+  const glow = ctx.createRadialGradient(x,SEA_TOP-10,4,x,SEA_TOP-10,70);
+  glow.addColorStop(0,'rgba(255,200,120,.35)');
+  glow.addColorStop(1,'rgba(255,200,120,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x-80,SEA_TOP-80,160,120);
+
+  for (let i=0;i<3;i++) {
+    const hx = x + i*42 - 42;
+    const hh = i===1 ? 30 : 24;
+    const houseG = ctx.createLinearGradient(hx-14,SEA_TOP-hh,hx+14,SEA_TOP);
+    houseG.addColorStop(0,'#7a5030');
+    houseG.addColorStop(1,'#4a2c1a');
+    ctx.fillStyle = houseG;
+    ctx.fillRect(hx-13, SEA_TOP-hh, 26, hh);
+    ctx.fillStyle = '#2e1c10';
+    ctx.beginPath();
+    ctx.moveTo(hx-17, SEA_TOP-hh+2);
+    ctx.lineTo(hx, SEA_TOP-hh-18);
+    ctx.lineTo(hx+17, SEA_TOP-hh+2);
+    ctx.closePath();
+    ctx.fill();
+    // janela iluminada
+    ctx.fillStyle = 'rgba(255,214,120,.9)';
+    ctx.fillRect(hx-3, SEA_TOP-hh+8, 6, 6);
+  }
+
+  // doca simples entrando na agua
+  ctx.fillStyle = '#4a2c1a';
+  ctx.fillRect(x-30, SEA_TOP+2, 60, 4);
+  ctx.restore();
+}
+
+function drawPlayer() {
+  const x = player.x - cameraX;
+  const y = player.y;
+  const w = player.w, h = player.h;
+  const bob = Math.sin(frame*0.12) * 2.5;
+  const tilt = Math.max(-0.12, Math.min(0.12, player.vy * 0.02));
+  const dir = player.facing;
+
+  ctx.save();
+  ctx.translate(x+w/2, y+h/2+bob);
+  ctx.rotate(tilt);
+  ctx.translate(-(x+w/2), -(y+h/2));
+
+  // sombra na agua (da volume/3D ao barco)
+  ctx.save();
+  ctx.globalAlpha = .25;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(x+w/2, y+h+7, w*0.55, 6, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  // casco com gradiente (da forma/volume)
+  const hullG = ctx.createLinearGradient(x, y+h*0.1, x, y+h*1.05);
+  hullG.addColorStop(0, '#8a5a35');
+  hullG.addColorStop(1, '#3f2413');
+  ctx.fillStyle = hullG;
+  ctx.strokeStyle = '#241812';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y+h*0.35);
+  ctx.quadraticCurveTo(x, y+h*1.08, x+w*0.5, y+h*1.08);
+  ctx.quadraticCurveTo(x+w, y+h*1.08, x+w, y+h*0.35);
+  ctx.lineTo(x+w*0.88, y+h*0.12);
+  ctx.lineTo(x+w*0.12, y+h*0.12);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // pranchas do casco
+  ctx.strokeStyle = 'rgba(0,0,0,.18)';
+  ctx.lineWidth = 1;
+  for (let py = y+h*0.4; py < y+h*1.02; py += 5) {
+    ctx.beginPath(); ctx.moveTo(x+3, py); ctx.lineTo(x+w-3, py); ctx.stroke();
+  }
+
+  // escudos redondos na amurada
+  const shieldColors = ['#c0392b','#e8dcc0','#c0392b'];
+  for (let i=0;i<3;i++) {
+    const sxp = x + w*0.2 + i*w*0.3;
+    const shieldG = ctx.createRadialGradient(sxp-1.5,y+h*0.55-1.5,0.5, sxp,y+h*0.55,5.5);
+    shieldG.addColorStop(0,'#fff');
+    shieldG.addColorStop(0.25, shieldColors[i]);
+    shieldG.addColorStop(1, i===1 ? '#c9bb98' : '#7a1f16');
+    ctx.fillStyle = shieldG;
+    ctx.beginPath();
+    ctx.arc(sxp, y+h*0.55, 5.2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#241812'; ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // cabeca de dragao na proa
+  const proaX = dir > 0 ? x+w : x;
+  ctx.fillStyle = '#3a2313';
+  ctx.beginPath();
+  ctx.moveTo(proaX, y+h*0.12);
+  ctx.quadraticCurveTo(proaX+18*dir, y-7, proaX+20*dir, y+5);
+  ctx.quadraticCurveTo(proaX+11*dir, y+h*0.05, proaX, y+h*0.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#ffd23f';
+  ctx.beginPath(); ctx.arc(proaX+11*dir, y-1, 1.7, 0, Math.PI*2); ctx.fill();
+
+  // popa curva
+  const popaX = dir > 0 ? x : x+w;
+  ctx.fillStyle = '#3a2313';
+  ctx.beginPath();
+  ctx.moveTo(popaX, y+h*0.15);
+  ctx.quadraticCurveTo(popaX-11*dir, y-3, popaX-9*dir, y+9);
+  ctx.closePath();
+  ctx.fill();
+
+  // mastro
+  const mastX = x + w*0.5;
+  ctx.strokeStyle = '#4a2c1a';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(mastX, y+h*0.12); ctx.lineTo(mastX, y-h*1.35);
+  ctx.stroke();
+
+  // vela balançando com o vento (animação continua)
+  const windFlutter = Math.sin(frame*0.07) * 6;
+  const sailG = ctx.createLinearGradient(mastX, y-h*1.28, mastX+22*dir, y-h*0.1);
+  sailG.addColorStop(0, '#fff8ea');
+  sailG.addColorStop(1, '#d8c9a3');
+  ctx.fillStyle = sailG;
+  ctx.strokeStyle = '#a8916a';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(mastX, y-h*1.25);
+  ctx.quadraticCurveTo(mastX + (20+windFlutter)*dir, y-h*0.7, mastX, y-h*0.15);
+  ctx.quadraticCurveTo(mastX + 8*dir, y-h*0.68, mastX, y-h*1.25);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = 'rgba(192,57,43,.45)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(mastX, y-h*1.02);
+  ctx.quadraticCurveTo(mastX + (14+windFlutter*0.6)*dir, y-h*0.7, mastX, y-h*0.4);
+  ctx.stroke();
+
+  // flamula no topo (balança independente, mais rapido que a vela)
+  const flagFlutter = Math.sin(frame*0.15) * 4;
+  ctx.fillStyle = '#c0392b';
+  ctx.beginPath();
+  ctx.moveTo(mastX, y-h*1.35);
+  ctx.lineTo(mastX+(12+flagFlutter)*dir, y-h*1.3);
+  ctx.lineTo(mastX, y-h*1.23);
+  ctx.closePath();
+  ctx.fill();
+
+  // vikingzinho em pe no conves
+  const vBob = Math.sin(frame*0.12 + 1) * 1.4;
+  const vx = x + w*0.5 - dir*w*0.16, vy = y + h*0.12 + vBob;
+  ctx.fillStyle = '#3a2313';
+  ctx.fillRect(vx-3, vy-2, 2.4, 8);
+  ctx.fillRect(vx+0.6, vy-2, 2.4, 8);
+  const tunicG = ctx.createLinearGradient(vx-5, vy-14, vx+5, vy);
+  tunicG.addColorStop(0,'#9a4a34'); tunicG.addColorStop(1,'#5c2318');
+  ctx.fillStyle = tunicG;
+  ctx.beginPath();
+  ctx.moveTo(vx-4, vy-2); ctx.lineTo(vx-5, vy-13); ctx.lineTo(vx+5, vy-13); ctx.lineTo(vx+4, vy-2);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#5c2318'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(vx+3.5*dir, vy-10); ctx.lineTo(vx+9*dir, vy-15); ctx.stroke();
+  ctx.fillStyle = '#9aa3ad';
+  ctx.beginPath();
+  ctx.moveTo(vx+9*dir, vy-19); ctx.lineTo(vx+13*dir, vy-15); ctx.lineTo(vx+9*dir, vy-12);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#e0b090';
+  ctx.beginPath(); ctx.arc(vx, vy-16, 3.8, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#9aa3ad';
+  ctx.beginPath(); ctx.arc(vx, vy-17.4, 4, Math.PI, 0); ctx.fill();
+  ctx.strokeStyle = '#e8dcc0'; ctx.lineWidth = 1.3;
+  ctx.beginPath(); ctx.moveTo(vx-3.6,vy-19); ctx.lineTo(vx-6.6,vy-23.6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(vx+3.6,vy-19); ctx.lineTo(vx+6.6,vy-23.6); ctx.stroke();
+  ctx.fillStyle = '#241812';
+  ctx.beginPath(); ctx.arc(vx+1.4*dir, vy-16, 0.8, 0, Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+function draw() {
+  drawBackground();
+  drawSplashes();
+  drawVillage();
+  for (const t of treasures) drawTreasure(t);
+  drawPlayer();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+updateHUD();
+loop();
+</script>
+</body>
+</html>

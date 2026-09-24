@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aula 1 — Estrela da Manhã</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@700;900&family=Inter:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#06060e;
+    --card:#0d0d1e;
+    --green:#00ff88;
+    --purple:#cc44ff;
+    --cyan:#00ddff;
+    --yellow:#ffe033;
+    --pink:#ff2288;
+    --text:#eef0ff;
+    --muted:#8b8ba8;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:radial-gradient(circle at 20% 15%, #14103a 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    overflow:hidden;
+  }
+  .stars{
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      radial-gradient(1.5px 1.5px at 10% 20%, #fff8, transparent),
+      radial-gradient(1.5px 1.5px at 80% 10%, #fff6, transparent),
+      radial-gradient(1px 1px at 60% 70%, #fff5, transparent),
+      radial-gradient(1.5px 1.5px at 30% 85%, #fff7, transparent),
+      radial-gradient(1px 1px at 90% 60%, #fff4, transparent),
+      radial-gradient(1.5px 1.5px at 45% 40%, #fff6, transparent);
+    background-size:100% 100%;
+    opacity:0.6;
+  }
+  .emoji-bg{
+    position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden;
+  }
+  .emoji-bg span{
+    position:absolute; opacity:.08; font-size:64px; filter:blur(.3px);
+    animation:float 9s ease-in-out infinite;
+  }
+  @keyframes float{
+    0%,100%{transform:translateY(0) rotate(0deg);}
+    50%{transform:translateY(-22px) rotate(8deg);}
+  }
+  .deck{position:relative; z-index:1; height:100vh; width:100vw;}
+  .slide{
+    position:absolute; inset:0;
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:5vh 7vw;
+    text-align:center;
+    animation:fadeIn .5s ease;
+    overflow-y:auto;
+  }
+  .slide.active{display:flex;}
+  .slide.top-align{justify-content:flex-start; padding-top:4vh;}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);}}
+  @keyframes pop{0%{transform:scale(.7); opacity:0;} 60%{transform:scale(1.08);} 100%{transform:scale(1); opacity:1;}}
+  @keyframes wiggle{0%,100%{transform:rotate(-3deg);} 50%{transform:rotate(3deg);}}
+
+  .eyebrow{
+    font-family:'Press Start 2P', monospace;
+    font-size:11px;
+    letter-spacing:2px;
+    color:var(--yellow);
+    margin-bottom:22px;
+    text-shadow:0 0 10px rgba(255,224,51,.5);
+  }
+  h1{
+    font-family:'Press Start 2P', monospace;
+    font-size:clamp(19px,3.4vw,38px);
+    line-height:1.55;
+    margin:0 0 18px;
+    color:var(--green);
+    text-shadow:0 0 18px rgba(0,255,136,.45);
+  }
+  h2{
+    font-family:'Orbitron', sans-serif;
+    font-weight:900;
+    font-size:clamp(21px,2.9vw,34px);
+    margin:0 0 22px;
+    color:var(--cyan);
+    text-shadow:0 0 14px rgba(0,221,255,.4);
+  }
+  p.lead{
+    font-size:clamp(14.5px,1.55vw,19px);
+    color:var(--text);
+    max-width:820px;
+    line-height:1.6;
+    margin:0 auto 10px;
+  }
+  .muted{color:var(--muted);}
+  .emojirow{font-size:34px; margin-bottom:10px; letter-spacing:10px;}
+
+  .badge{
+    font-family:'Press Start 2P', monospace;
+    font-size:10px;
+    color:var(--purple);
+    border:2px solid var(--purple);
+    padding:10px 18px;
+    border-radius:6px;
+    box-shadow:0 0 16px rgba(204,68,255,.35), inset 0 0 10px rgba(204,68,255,.15);
+    margin-bottom:30px;
+    letter-spacing:1.5px;
+  }
+
+  .grid3{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:20px;
+    width:100%;
+    max-width:1000px;
+    margin-top:10px;
+  }
+  .grid2{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:20px;
+    width:100%;
+    max-width:760px;
+    margin-top:10px;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:14px;
+    padding:24px 18px;
+    text-align:left;
+    transition:transform .15s ease, border-color .15s ease;
+  }
+  .card:hover{transform:translateY(-4px); border-color:var(--green);}
+  .card .num{
+    font-family:'Press Start 2P', monospace;
+    font-size:20px;
+    margin-bottom:10px;
+    display:block;
+  }
+  .card h3{
+    font-family:'Orbitron',sans-serif;
+    font-size:17px;
+    margin:0 0 8px;
+    color:var(--green);
+  }
+  .card p{margin:0; font-size:13.5px; color:var(--muted); line-height:1.5;}
+
+  .editnote{
+    display:inline-block;
+    margin-top:20px;
+    font-size:12px;
+    color:var(--pink);
+    border:1px dashed rgba(255,34,136,.5);
+    border-radius:8px;
+    padding:8px 14px;
+    background:rgba(255,34,136,.06);
+  }
+
+  .timeline{
+    display:flex;
+    gap:10px;
+    width:100%;
+    max-width:1150px;
+    flex-wrap:wrap;
+    justify-content:center;
+    margin-top:8px;
+  }
+  .tl-item{
+    background:var(--card);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:12px;
+    padding:16px 12px;
+    width:130px;
+    text-align:center;
+  }
+  .tl-item.current{border-color:var(--green); box-shadow:0 0 18px rgba(0,255,136,.3);}
+  .tl-item .n{font-family:'Press Start 2P',monospace; font-size:16px; color:var(--cyan);}
+  .tl-item .t{font-family:'Orbitron',sans-serif; font-size:11.5px; color:var(--text); margin-top:8px; line-height:1.3;}
+  .tl-item .icon{font-size:22px; margin-top:6px;}
+
+  /* DNA diagram with hover examples */
+  .dna-box{
+    width:100%;
+    max-width:800px;
+    background:var(--card);
+    border:2px solid var(--purple);
+    border-radius:16px;
+    box-shadow:0 0 30px rgba(204,68,255,.25);
+    padding:22px 28px;
+    text-align:left;
+  }
+  .dna-row{
+    position:relative;
+    display:flex;
+    align-items:flex-start;
+    gap:14px;
+    padding:12px 4px;
+    border-bottom:1px solid rgba(255,255,255,.07);
+    border-radius:8px;
+    cursor:pointer;
+    transition:background .15s ease;
+  }
+  .dna-row:last-child{border-bottom:none;}
+  .dna-row:hover{background:rgba(255,255,255,.04);}
+  .dna-row .ico{font-size:28px; line-height:1;}
+  .dna-row .lbl{font-family:'Orbitron',sans-serif; font-weight:900; font-size:15px; color:var(--yellow); margin-bottom:3px;}
+  .dna-row .desc{font-size:13.5px; color:var(--muted);}
+  .dna-example{
+    position:absolute; right:0; top:50%; transform:translate(6px,-50%) scale(.9);
+    background:#14102b; border:1px solid var(--cyan);
+    border-radius:10px; padding:8px 14px;
+    font-size:12px; color:var(--cyan);
+    opacity:0; visibility:hidden; pointer-events:none;
+    transition:all .18s ease;
+    white-space:nowrap;
+    box-shadow:0 0 16px rgba(0,221,255,.35);
+    z-index:5;
+  }
+  .dna-example .em{font-size:22px; margin-bottom:4px; letter-spacing:4px;}
+  .dna-row:hover .dna-example{opacity:1; visibility:visible; transform:translate(0,-50%) scale(1);}
+  @media (max-width:820px){
+    .dna-example{position:static; transform:none; opacity:1; visibility:visible; margin-top:6px; white-space:normal;}
+  }
+
+  .answer{
+    width:100%; max-width:760px;
+    background:linear-gradient(160deg, rgba(0,255,136,.08), rgba(13,13,30,.4));
+    border:1px solid rgba(0,255,136,.35);
+    border-radius:14px;
+    padding:20px 26px;
+    text-align:left;
+    font-size:14.5px;
+    line-height:1.9;
+  }
+  .answer b{color:var(--green);}
+
+  /* Q&A stacked style (perguntas com resposta oculta) */
+  .qa-block{width:100%; max-width:640px; margin-top:16px; text-align:left;}
+  .qa-item{
+    background:var(--card); border:1px solid rgba(255,255,255,.08);
+    border-radius:12px; padding:14px 18px; margin-bottom:10px;
+  }
+  .qa-item .q{font-size:14.5px; margin-bottom:8px;}
+  .qa-item .a-btn{
+    font-family:'Orbitron',sans-serif; font-weight:700; font-size:11px;
+    background:rgba(0,255,136,.1); border:1px solid var(--green); color:var(--green);
+    padding:6px 12px; border-radius:8px; cursor:pointer;
+  }
+  .qa-item .a-btn:hover{background:rgba(0,255,136,.25);}
+  .qa-item .a-text{display:none; font-size:13.5px; color:var(--yellow); margin-top:8px; animation:pop .3s ease;}
+  .qa-item .a-text.shown{display:block;}
+
+  .btnrow{display:flex; gap:16px; margin-top:28px; flex-wrap:wrap; justify-content:center;}
+  .pill{
+    font-family:'Orbitron',sans-serif; font-weight:700; font-size:13px;
+    padding:10px 20px; border-radius:999px; border:1px solid rgba(255,255,255,.15);
+    color:var(--text); background:rgba(255,255,255,.04);
+  }
+  .pill.green{border-color:var(--green); color:var(--green);}
+  .pill.cyan{border-color:var(--cyan); color:var(--cyan);}
+  .pill.pink{border-color:var(--pink); color:var(--pink);}
+
+  .linkbtn{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:'Orbitron',sans-serif; font-weight:900; font-size:14px;
+    text-decoration:none;
+    background:linear-gradient(120deg, var(--purple), var(--pink));
+    color:#fff; padding:14px 26px; border-radius:999px;
+    box-shadow:0 0 22px rgba(204,68,255,.5);
+    margin-top:22px;
+    animation:wiggle 2.4s ease-in-out infinite;
+  }
+  .linkbtn:hover{filter:brightness(1.15);}
+  .linkbtn.small{font-size:12px; padding:10px 18px;}
+
+  .teams-wrap{
+    display:flex; gap:16px; flex-wrap:wrap; justify-content:center;
+    margin-top:26px; width:100%; max-width:700px;
+  }
+  .team-block{display:flex; flex-direction:column; align-items:center; gap:10px;}
+  .team-btn{
+    font-family:'Orbitron',sans-serif; font-weight:900; font-size:13px;
+    background:var(--card); border:2px solid var(--pink); color:var(--pink);
+    padding:12px 20px; border-radius:12px; cursor:pointer;
+    box-shadow:0 0 12px rgba(255,34,136,.25);
+    transition:all .15s ease;
+  }
+  .team-btn:hover{background:rgba(255,34,136,.12); transform:translateY(-2px);}
+  .team-btn.open{background:var(--pink); color:#fff;}
+  .team-list{
+    display:none; flex-direction:column; gap:6px;
+    background:var(--card); border:1px solid rgba(255,255,255,.1);
+    border-radius:10px; padding:12px 20px; font-size:13.5px;
+    animation:pop .25s ease;
+  }
+  .team-list.show{display:flex;}
+
+  .warn-tag{
+    display:inline-block; margin-top:22px;
+    font-family:'Press Start 2P',monospace; font-size:12px;
+    color:#fff; background:linear-gradient(120deg, var(--pink), #ff6b00);
+    padding:14px 22px; border-radius:10px;
+    box-shadow:0 0 24px rgba(255,34,136,.5);
+    animation:wiggle 2s ease-in-out infinite;
+  }
+
+  .qlist{list-style:none; padding:0; margin:20px auto 0; max-width:640px; text-align:left;}
+  .qlist li{
+    background:var(--card); border:1px solid rgba(255,255,255,.08);
+    border-radius:10px; padding:12px 16px; margin-bottom:10px;
+    font-size:14.5px;
+  }
+
+  .nav{
+    position:fixed; bottom:18px; left:0; right:0;
+    display:flex; align-items:center; justify-content:center;
+    gap:18px; z-index:5;
+  }
+  .navbtn{
+    font-family:'Press Start 2P', monospace; font-size:11px;
+    background:var(--card); border:1px solid rgba(255,255,255,.15); color:var(--text);
+    padding:10px 16px; border-radius:8px; cursor:pointer; transition:all .15s ease;
+  }
+  .navbtn:hover{border-color:var(--green); color:var(--green); box-shadow:0 0 12px rgba(0,255,136,.35);}
+  .dots{display:flex; gap:5px; flex-wrap:wrap; max-width:260px; justify-content:center;}
+  .dot{width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.2);}
+  .dot.on{background:var(--green); box-shadow:0 0 8px var(--green);}
+  .counter{
+    position:fixed; top:18px; right:24px;
+    font-family:'Press Start 2P',monospace; font-size:11px; color:var(--muted); z-index:5;
+  }
+
+  .mascote-grid{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:18px;
+    width:100%; max-width:700px;
+  }
+  .mascote-slot{
+    aspect-ratio:1/1; background:var(--card);
+    border:2px dashed rgba(0,221,255,.4); border-radius:14px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-size:40px; gap:8px;
+    cursor:pointer; position:relative; overflow:hidden;
+    transition:border-color .15s ease;
+  }
+  .mascote-slot:hover{border-color:var(--cyan);}
+  .mascote-slot.filled{border-style:solid; border-color:var(--green);}
+  .mascote-slot .tname{font-family:'Orbitron',sans-serif; font-size:12px; color:var(--cyan); z-index:2;}
+  .mascote-slot .placeholder-ico{z-index:2;}
+  .mascote-slot .upload-hint{
+    position:absolute; bottom:6px; font-size:9px; font-family:'Orbitron',sans-serif;
+    color:var(--muted); z-index:2;
+  }
+  .mascote-slot img{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    display:none; z-index:1;
+  }
+  .mascote-slot.filled img{display:block;}
+  .mascote-slot.filled .placeholder-ico, .mascote-slot.filled .upload-hint{display:none;}
+  .mascote-slot.filled .tname{
+    position:absolute; bottom:6px; background:rgba(6,6,14,.75);
+    padding:3px 10px; border-radius:8px;
+  }
+  .mascote-slot input[type="file"]{display:none;}
+
+  .steps{
+    width:100%; max-width:640px; margin-top:18px;
+    display:flex; flex-direction:column; gap:8px; text-align:left;
+  }
+  .step{
+    display:flex; align-items:center; gap:12px;
+    background:var(--card); border:1px solid rgba(255,255,255,.08);
+    border-radius:10px; padding:10px 16px; font-size:13.5px;
+  }
+  .style-grid{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
+    width:100%; max-width:640px; margin:6px 0 2px;
+  }
+  .style-chip{
+    font-family:'Inter',sans-serif; font-weight:700; font-size:11.5px;
+    background:var(--card); border:1px solid rgba(255,255,255,.12); color:var(--text);
+    padding:9px 6px; border-radius:10px; cursor:pointer; text-align:center;
+    transition:all .15s ease;
+  }
+  .style-chip .sub{display:block; font-weight:500; font-size:10px; color:var(--muted); margin-top:2px;}
+  .style-chip:hover{border-color:var(--cyan);}
+  .style-chip.picked{background:linear-gradient(120deg, var(--purple), var(--pink)); border-color:transparent; box-shadow:0 0 14px rgba(204,68,255,.5);}
+  .style-chip.picked .sub{color:#fff;}
+  .style-chip .ico{display:block; font-size:18px; margin-bottom:3px;}
+  .color-grid{
+    display:grid; grid-template-columns:repeat(6,1fr); gap:8px;
+    width:100%; max-width:640px; margin:6px 0 2px;
+  }
+  .color-chip{
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+    cursor:pointer; padding:4px; border-radius:10px; border:2px solid transparent;
+    transition:all .15s ease;
+  }
+  .color-chip:hover{border-color:rgba(255,255,255,.25);}
+  .color-chip.picked{border-color:#fff; box-shadow:0 0 12px rgba(255,255,255,.4);}
+  .color-chip .swatch{width:32px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.25);}
+  .color-chip .cname{font-family:'Inter',sans-serif; font-size:9.5px; color:var(--muted); text-align:center;}
+  .color-chip.picked .cname{color:var(--text);}
+  @media (max-width:760px){
+    .style-grid{grid-template-columns:repeat(3,1fr);}
+    .color-grid{grid-template-columns:repeat(4,1fr);}
+  }
+  .arrow{text-align:center; color:var(--muted); font-size:16px;}
+  .step .snum{font-family:'Press Start 2P',monospace; font-size:12px; color:var(--yellow); flex-shrink:0;}
+
+  @media (max-width:760px){
+    .grid3{grid-template-columns:1fr;}
+    .grid2{grid-template-columns:1fr;}
+    .mascote-grid{grid-template-columns:repeat(3,1fr); gap:8px;}
+  }
+</style>
+</head>
+<body>
+<div class="stars"></div>
+<div class="emoji-bg">
+  <span style="top:8%; left:6%; animation-delay:0s;">🕹️</span>
+  <span style="top:70%; left:12%; animation-delay:1.5s;">👾</span>
+  <span style="top:20%; left:85%; animation-delay:.7s;">🎮</span>
+  <span style="top:80%; left:80%; animation-delay:2.2s;">⭐</span>
+  <span style="top:45%; left:3%; animation-delay:1s;">🚀</span>
+  <span style="top:55%; left:92%; animation-delay:1.8s;">💥</span>
+</div>
+<div class="counter"><span id="cnt">1</span> / <span id="tot">17</span></div>
+
+<div class="deck" id="deck">
+
+  <!-- 1 -->
+  <section class="slide active">
+    <div class="badge">✦ ESTRELA DA MANHÃ ✦</div>
+    <div class="emojirow">🕹️👾🎮🚀⭐</div>
+    <h1>AULA 1<br>Boas-vindas para a 1ª turma de<br>Desenvolvimento de Jogos com IA!! 🔥</h1>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="eyebrow">POR QUE VOCÊS ESTÃO AQUI</div>
+    <h2>Vocês vão criar jogos de verdade 🎮</h2>
+    <p class="lead">Não tem prova, não tem nota. Cada time vai sair daqui com um jogo criado do zero <b style="color:var(--yellow)">e publicado em uma plataforma gamer mundial</b> 🌍✨</p>
+    <div class="grid2">
+      <div class="card"><span class="num">🎮</span><h3>Jogo do time</h3><p>Criado do zero, em grupo, publicado numa plataforma gamer mundial.</p></div>
+      <div class="card"><span class="num">💼</span><h3>Portfólio pessoal</h3><p>Todos os projetos individuais que vocês fizerem no caminho.</p></div>
+    </div>
+    <p class="lead" style="margin-top:22px;">🔥 <b style="color:var(--pink)">Toda aula tem um desafio.</b> E em alguns... vai rolar até <b style="color:var(--yellow)">prêmio</b>! 🏆</p>
+  </section>
+
+  <!-- 3 - kit -->
+  <section class="slide">
+    <div class="eyebrow">O KIT</div>
+    <h2>O que vocês vão receber hoje 🎁</h2>
+    <div class="emojirow">📓✏️🖍️🧊🥤🎨</div>
+    <p class="lead">Caderno, caneta, hidrocor, cubo mágico, copo e adesivos. Guardem tudo, vamos usar em várias aulas!</p>
+  </section>
+
+  <!-- 4 - cronograma -->
+  <section class="slide">
+    <div class="eyebrow">O CAMINHO</div>
+    <h2>7 aulas, uma peça nova a cada uma 🧩</h2>
+    <div class="timeline">
+      <div class="tl-item current"><div class="n">01</div><div class="icon">🧬</div><div class="t">DNA do jogo</div></div>
+      <div class="tl-item"><div class="n">02</div><div class="icon">🕹️</div><div class="t">Elemento principal</div></div>
+      <div class="tl-item"><div class="n">03</div><div class="icon">⚡</div><div class="t">Controle</div></div>
+      <div class="tl-item"><div class="n">04</div><div class="icon">🏆</div><div class="t">Objetivo</div></div>
+      <div class="tl-item"><div class="n">05</div><div class="icon">💀</div><div class="t">Obstáculo</div></div>
+      <div class="tl-item"><div class="n">06</div><div class="icon">🌍</div><div class="t">Mundo + Especial</div></div>
+      <div class="tl-item"><div class="n">07</div><div class="icon">🚀</div><div class="t">Portfólio + Publicação</div></div>
+    </div>
+  </section>
+
+  <!-- 5 - lideres -->
+  <section class="slide">
+    <div class="eyebrow">OS TIMES</div>
+    <h2>Cada time tem um líder 👑</h2>
+    <p class="lead">O líder não é o chefe — é quem ajuda o time a decidir e organiza o pedido que vai pro Claude. Todo mundo participa igual.</p>
+    <p class="lead" style="margin-top:14px; color:var(--yellow); font-weight:700;">🎲 E VAMOS AGORA SORTEAR QUEM SERÁ O LÍDER DO SEU TIME! 🎲</p>
+    <div class="teams-wrap">
+      <div class="team-block">
+        <button class="team-btn" onclick="toggleTeam(this)">👥 TIME 1</button>
+        <div class="team-list">
+          <div>Gabriel</div><div>Henrique</div><div>Emanuel</div><div>Gaby</div>
+        </div>
+      </div>
+      <div class="team-block">
+        <button class="team-btn" onclick="toggleTeam(this)">👥 TIME 2</button>
+        <div class="team-list">
+          <div>Nicolas</div><div>Carlos</div><div>David</div><div>Kauan</div>
+        </div>
+      </div>
+      <div class="team-block">
+        <button class="team-btn" onclick="toggleTeam(this)">👥 TIME 3</button>
+        <div class="team-list">
+          <div>Bernardo</div><div>Alana</div><div>Miguel Ramos</div><div>Gil</div>
+        </div>
+      </div>
+    </div>
+    <a class="linkbtn" href="https://sorteio-xi-ten.vercel.app/" target="_blank" rel="noopener">🎰 ABRIR SORTEIO</a>
+  </section>
+
+  <!-- 6 - premiacao -->
+  <section class="slide">
+    <div class="eyebrow">VALE A PENA CAPRICHAR</div>
+    <h2>🏆 Premiação</h2>
+    <div class="emojirow">🥇🥈🥉🎖️</div>
+    <p class="lead">Toda aula vai ter um desafio. <b style="color:var(--yellow)">Alguns desafios</b> vão ter reconhecimento especial pra quem mandar bem 🏅. No Demo Day tem premiação geral pro melhor jogo — 🥇🥈🥉 e certificado pra todo mundo!</p>
+  </section>
+
+  <!-- 7 - faltas -->
+  <section class="slide">
+    <div class="eyebrow">COMBINADO</div>
+    <h2>Sobre as aulas e faltas 📅</h2>
+    <p class="lead">Vamos ter aula <b style="color:var(--cyan)">sábado sim, sábado não</b>, começando hoje, dia <b style="color:var(--green)">08/08</b>, e terminando no dia <b style="color:var(--green)">07/11</b>. Não prejudique seu time — cada aula constrói em cima da anterior! 🧩</p>
+    <div class="warn-tag">⚠️ 2 FALTAS = SAÍDA DA TURMA ⚠️</div>
+  </section>
+
+  <!-- 8 - transicao -->
+  <section class="slide">
+    <div class="emojirow" style="font-size:48px;">🚀🔥🎮</div>
+    <h1 style="color:var(--pink); text-shadow:0 0 18px rgba(255,34,136,.5);">Chega de conversa.<br>Bora começar!! 🔥</h1>
+  </section>
+
+  <!-- 9 - NOVO: dinamica da selecao -->
+  <section class="slide">
+    <div class="eyebrow">MEMÓRIAS 🧠✨</div>
+    <div class="emojirow">🤯👀💭</div>
+    <h2>Vocês se lembram da nossa dinâmica de seleção?? 🎭</h2>
+    <p class="lead">Aquele momento em que vocês criaram os personagens... tá tudo registrado! 📸</p>
+    <a class="linkbtn" href="https://jogos-ia.vercel.app/personagens-em-acao.html" target="_blank" rel="noopener">🔎 VEJA AQUI O RESULTADO</a>
+  </section>
+
+  <!-- 10 (era 9) - o que faz um jogo -->
+  <section class="slide">
+    <div class="eyebrow">VAMOS ANALISAR JUNTOS 🕵️‍♀️</div>
+    <h2>O que faz esse jogo funcionar? 🐦</h2>
+    <a class="linkbtn small" href="https://flappybird.io/" target="_blank" rel="noopener">▶️ ABRIR FLAPPY BIRD</a>
+    <div class="qa-block">
+      <div class="qa-item">
+        <div class="q">🤔 O que esse jogo tem?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">Um passarinho, canos verdes, pontuação e um céu de fundo.</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">⚡ O que faz ele funcionar?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">Clique/espaço faz ele subir, a gravidade puxa pra baixo o tempo todo.</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">🎯 Qual é o objetivo dele?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">Sobreviver o máximo de tempo possível / fazer a maior pontuação.</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">💀 O que mata o passarinho?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">Bater nos canos verdes, no chão ou no teto.</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">✨ O que ele tem de diferente de outros jogos?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">Dificuldade extrema com um visual bem simples e fofo.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 - NOVO: segundo jogo pra analisar -->
+  <section class="slide">
+    <div class="eyebrow">MAIS UM PRA GENTE ANALISAR 🎮</div>
+    <h2>Vamos destrinchar o Pac-Man! 👻🟡</h2>
+    <a class="linkbtn small" href="https://freepacman.org/" target="_blank" rel="noopener">▶️ ABRIR PAC-MAN</a>
+    <div class="qa-block">
+      <div class="qa-item">
+        <div class="q">🕹️ Qual é o elemento principal aqui?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">O próprio Pac-Man, a bolinha amarela.</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">⚡ Como ele se controla — é igual ao Flappy Bird?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">Com as setas do teclado, em 4 direções — diferente do Flappy, que só tem 1 botão.</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">🏆 Como o jogador GANHA nesse jogo?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">Comendo todos os pontinhos do labirinto.</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">👻 Quem são os obstáculos/inimigos?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">Os fantasmas.</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">🌍 Onde esse jogo acontece?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">Dentro de um labirinto.</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">✨ O que tem de especial nesse jogo?</div>
+        <button class="a-btn" onclick="revealQA(this)">🔓 Ver resposta</button>
+        <div class="a-text">As pílulas de poder — comem elas e viram o jogo, podendo comer os fantasmas por um tempo.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 - DNA do jogo com hover -->
+  <section class="slide">
+    <div class="eyebrow">TODO JOGO TEM ISSO</div>
+    <h2>🧬 O DNA do Jogo</h2>
+    <p class="lead muted" style="font-size:12.5px; margin-bottom:14px;">💡 passa o mouse em cada linha pra ver exemplos</p>
+    <div class="dna-box">
+      <div class="dna-row"><div class="ico">🕹️</div><div><div class="lbl">Elemento Principal</div><div class="desc">O que o jogador controla</div></div>
+        <div class="dna-example"><div class="em">🐦🚀⚽🧊</div>passarinho, nave, bola, bloco...</div></div>
+      <div class="dna-row"><div class="ico">⚡</div><div><div class="lbl">Controle</div><div class="desc">Como ele se move</div></div>
+        <div class="dna-example"><div class="em">⌨️👆🖱️</div>tecla, toque, clique...</div></div>
+      <div class="dna-row"><div class="ico">🏆</div><div><div class="lbl">Objetivo</div><div class="desc">Como o jogador GANHA</div></div>
+        <div class="dna-example"><div class="em">🏁🎯💰</div>chegar lá, pontuar, coletar...</div></div>
+      <div class="dna-row"><div class="ico">💀</div><div><div class="lbl">Obstáculo</div><div class="desc">O que mata ou atrapalha</div></div>
+        <div class="dna-example"><div class="em">🌵🧱👻</div>cactos, paredes, fantasmas...</div></div>
+      <div class="dna-row"><div class="ico">🌍</div><div><div class="lbl">Mundo</div><div class="desc">Onde tudo isso acontece</div></div>
+        <div class="dna-example"><div class="em">🌌🏙️🌊</div>espaço, cidade, mar...</div></div>
+      <div class="dna-row"><div class="ico">✨</div><div><div class="lbl">Algo Especial</div><div class="desc">O diferencial — o que ninguém mais tem</div></div>
+        <div class="dna-example"><div class="em">🔥🦄💫</div>poder único, efeito raro...</div></div>
+    </div>
+  </section>
+
+  <!-- 13 - trabalho em grupo -->
+  <section class="slide">
+    <div class="eyebrow">AGORA É COM VOCÊS</div>
+    <h2>O DNA do jogo do SEU time 🎨</h2>
+    <p class="lead">Peguem a bobina, o canetão, e desenhem GRANDE os 6 blocos abaixo. Discutam em voz alta — cada ideia vai pro papel, depois o time escolhe junto!</p>
+    <div class="timeline" style="margin-top:8px;">
+      <div class="tl-item"><div class="icon">🕹️</div><div class="t">Elemento</div></div>
+      <div class="tl-item"><div class="icon">⚡</div><div class="t">Controle</div></div>
+      <div class="tl-item"><div class="icon">🏆</div><div class="t">Objetivo</div></div>
+      <div class="tl-item"><div class="icon">💀</div><div class="t">Obstáculo</div></div>
+      <div class="tl-item"><div class="icon">🌍</div><div class="t">Mundo</div></div>
+      <div class="tl-item"><div class="icon">✨</div><div class="t">Especial</div></div>
+    </div>
+    <p class="lead muted" style="margin-top:22px; font-size:13px;">🤔 Se travarem em algum bloco:</p>
+    <div class="grid3">
+      <div class="card" style="padding:14px 14px;"><p style="font-size:12.5px;">🕹️ "Se esse jogo fosse um bicho, uma máquina ou uma forma, o que seria?"</p></div>
+      <div class="card" style="padding:14px 14px;"><p style="font-size:12.5px;">🏆 "O jogador ganha chegando em algum lugar, juntando pontos, ou sobrevivendo?"</p></div>
+      <div class="card" style="padding:14px 14px;"><p style="font-size:12.5px;">✨ "O que vocês gostariam que tivesse num jogo que nenhum outro tem?"</p></div>
+    </div>
+  </section>
+
+  <!-- 14 - mascotes / criar agora -->
+  <section class="slide top-align">
+    <div class="eyebrow">NOSSA CRIAÇÃO DE HOJE</div>
+    <h2>Vamos criar nosso mascote??? 🐉✨</h2>
+    <div class="mascote-grid">
+      <label class="mascote-slot" for="upload-time1">
+        <span class="placeholder-ico">🐲</span>
+        <span class="tname">TIME 1</span>
+        <span class="upload-hint">📷 clique pra subir</span>
+        <img id="img-time1" alt="Mascote Time 1">
+        <input type="file" id="upload-time1" accept="image/*" onchange="loadMascote(this,'time1')">
+      </label>
+      <label class="mascote-slot" for="upload-time2">
+        <span class="placeholder-ico">🦊</span>
+        <span class="tname">TIME 2</span>
+        <span class="upload-hint">📷 clique pra subir</span>
+        <img id="img-time2" alt="Mascote Time 2">
+        <input type="file" id="upload-time2" accept="image/*" onchange="loadMascote(this,'time2')">
+      </label>
+      <label class="mascote-slot" for="upload-time3">
+        <span class="placeholder-ico">🐧</span>
+        <span class="tname">TIME 3</span>
+        <span class="upload-hint">📷 clique pra subir</span>
+        <img id="img-time3" alt="Mascote Time 3">
+        <input type="file" id="upload-time3" accept="image/*" onchange="loadMascote(this,'time3')">
+      </label>
+    </div>
+    <p class="lead" style="margin-top:20px; color:var(--yellow); font-weight:700;">✍️ Vamos começar a escrever na IA!</p>
+
+    <div class="steps">
+      <div class="step"><span class="snum">1️⃣</span> Personagem/criatura — escolham clicando abaixo:</div>
+    </div>
+    <div class="style-grid">
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🐉</span>Dragão</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🦊</span>Raposa</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🤖</span>Robô</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🐱</span>Gato</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🐰</span>Coelho</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🐻</span>Urso</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🦈</span>Tubarão</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🦄</span>Unicórnio</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">👻</span>Fantasma</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">👽</span>Alien</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🦖</span>Dinossauro</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🐧</span>Pinguim</div>
+    </div>
+
+    <div class="steps" style="margin-top:16px;">
+      <div class="arrow">⬇️</div>
+      <div class="step"><span class="snum">2️⃣</span> Características físicas — escolham quantas quiserem:</div>
+    </div>
+    <div class="style-grid">
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">👀</span>Olhos grandes</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🦵</span>Pernas curtas</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">💪</span>Braços longos</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">😁</span>Boca sorridente</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">👂</span>Orelhas grandes</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🦌</span>Chifres</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🪽</span>Asas</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">〰️</span>Cauda longa</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">⚫</span>Corpo redondo</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🔍</span>Tamanho pequeno</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🦷</span>Presas afiadas</div>
+      <div class="style-chip" onclick="pickStyle(this)"><span class="ico">🎩</span>Usa acessório</div>
+    </div>
+
+    <div class="steps" style="margin-top:16px;">
+      <div class="arrow">⬇️</div>
+      <div class="step"><span class="snum">3️⃣</span> Estilo — escolham um clicando abaixo:</div>
+    </div>
+    <div class="style-grid">
+      <div class="style-chip" onclick="pickStyle(this)">Cartoon<span class="sub">desenho animado</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">Pixel art<span class="sub">quadradinho retrô</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">3D<span class="sub">boneco tipo Pixar</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">Anime<span class="sub">mangá</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">Chibi<span class="sub">fofinho, cabeça grande</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">Realista<span class="sub">foto</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">Aquarela<span class="sub">pintura</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">Flat design<span class="sub">chapado, sem sombra</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">Neon/cyberpunk<span class="sub">brilhante no escuro</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">Massinha<span class="sub">argila</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">Origami<span class="sub">dobradura</span></div>
+      <div class="style-chip" onclick="pickStyle(this)">Low poly<span class="sub">triângulos</span></div>
+    </div>
+
+    <div class="steps" style="margin-top:16px;">
+      <div class="arrow">⬇️</div>
+      <div class="step"><span class="snum">4️⃣</span> Cores principais do time — escolham 2:</div>
+    </div>
+    <div class="color-grid">
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#ff3b3b;"></span><span class="cname">Vermelho</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#3b82f6;"></span><span class="cname">Azul</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#22c55e;"></span><span class="cname">Verde</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#ffe033;"></span><span class="cname">Amarelo</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#a855f7;"></span><span class="cname">Roxo</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#ff2288;"></span><span class="cname">Rosa</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#fb923c;"></span><span class="cname">Laranja</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#00ddff;"></span><span class="cname">Ciano</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#1a1a1a; border-color:rgba(255,255,255,.4);"></span><span class="cname">Preto</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#ffffff;"></span><span class="cname">Branco</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#d4af37;"></span><span class="cname">Dourado</span></div>
+      <div class="color-chip" onclick="pickStyle(this)"><span class="swatch" style="background:#c0c0c0;"></span><span class="cname">Prateado</span></div>
+    </div>
+
+    <div class="steps" style="margin-top:16px;">
+      <div class="arrow">⬇️</div>
+      <div class="step"><span class="snum">5️⃣</span> Fundo — transparente ou branco</div>
+    </div>
+
+    <div class="answer" style="margin-top:18px; font-size:13px;">
+      <b>Prompt modelo:</b> "Mascote de jogo eletrônico para o time [nome do time]. Personagem: um(a) [personagem], com [características físicas escolhidas]. Estilo artístico: [estilo]. Cores principais: [cor 1] e [cor 2]. Corpo inteiro, de frente, pose amigável e simétrica. Fundo branco liso, sem sombra, sem textura, sem texto e sem marca d'água. Uma imagem só, com um único personagem."
+    </div>
+  </section>
+
+  <!-- 15 - wow moment -->
+  <section class="slide">
+    <div class="eyebrow">DEMONSTRAÇÃO AO VIVO</div>
+    <h2>⚡ O WOW moment</h2>
+    <div class="emojirow">🤯💻🎮</div>
+    <p class="lead">Escrevemos em português no Claude. A IA fez o código. Colamos no CodePen. Apareceu na tela.</p>
+    <div class="btnrow">
+      <div class="pill green">claude.ai</div>
+      <div class="pill cyan">→</div>
+      <div class="pill pink">codepen.io</div>
+    </div>
+    <p class="lead muted" style="margin-top:26px;">Na próxima aula é isso que vocês vão fazer — com o ELEMENTO que vocês acabaram de desenhar 🕹️</p>
+  </section>
+
+  <!-- 16 - fechamento -->
+  <section class="slide">
+    <div class="eyebrow">PRÓXIMA AULA</div>
+    <h2>🕹️ Elemento Principal</h2>
+    <p class="lead">Na Aula 2 a gente pega só UM pedaço do DNA de vocês e coloca ele na tela, com código de verdade. O jogo de vocês começa a existir! 🚀</p>
+    <div class="answer" style="margin-top:22px;">
+      <b>Desafio de hoje:</b> sozinho, desenhe o DNA PERFEITO do jogo do seu time — capricha nos 6 blocos, com desenho e explicação ao lado de cada um. Traz na próxima aula 📓✏️
+    </div>
+  </section>
+
+</div>
+
+<div class="nav">
+  <button class="navbtn" onclick="go(-1)">◀</button>
+  <div class="dots" id="dots"></div>
+  <button class="navbtn" onclick="go(1)">▶</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const dotsWrap = document.getElementById('dots');
+  const cnt = document.getElementById('cnt');
+  document.getElementById('tot').textContent = slides.length;
+  let i = 0;
+  slides.forEach((_, idx) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (idx === 0 ? ' on' : '');
+    dotsWrap.appendChild(d);
+  });
+  const dots = document.querySelectorAll('.dot');
+
+  function render(){
+    slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+    dots.forEach((d, idx) => d.classList.toggle('on', idx === i));
+    cnt.textContent = i + 1;
+  }
+  function go(dir){
+    i = Math.min(Math.max(i + dir, 0), slides.length - 1);
+    render();
+  }
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'ArrowRight' || e.key === ' ') go(1);
+    if(e.key === 'ArrowLeft') go(-1);
+  });
+  function loadMascote(input, teamId){
+    const file = input.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const img = document.getElementById('img-' + teamId);
+      img.src = e.target.result;
+      img.closest('.mascote-slot').classList.add('filled');
+    };
+    reader.readAsDataURL(file);
+  }
+  function pickStyle(chip){
+    chip.classList.toggle('picked');
+  }
+  function toggleTeam(btn){
+    const list = btn.nextElementSibling;
+    const isOpen = list.classList.toggle('show');
+    btn.classList.toggle('open', isOpen);
+  }
+  function revealQA(btn){
+    const txt = btn.nextElementSibling;
+    const isShown = txt.classList.toggle('shown');
+    btn.textContent = isShown ? '🔒 Esconder resposta' : '🔓 Ver resposta';
+  }
+  render();
+</script>
+</body>
+</html>

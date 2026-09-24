@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🛹 Skate no Bairro — Jogo Modelo (Aula 5)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root { --ink:#1c1230; --gold:#ffd23f; --hot:#ff4d6d; }
+  html,body {
+    width:100%; height:100%;
+    background: linear-gradient(180deg, #ff9a5a, #ffd08a);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Press Start 2P', monospace;
+    overflow:hidden;
+  }
+  #wrap { position:relative; width:900px; max-width:96vw; filter:drop-shadow(0 10px 0 rgba(0,0,0,.3)); }
+  #hud {
+    position:absolute; top:0; left:0; right:0; z-index:5; pointer-events:none;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:12px 18px; font-size:13px; letter-spacing:1px;
+    background:linear-gradient(180deg, rgba(20,10,40,.85), rgba(20,10,40,0));
+  }
+  #hud .stat { color:#fff; text-shadow:2px 2px 0 #000; white-space:nowrap; }
+  #hud .stat b { color:var(--gold); font-size:15px; }
+  #progress { flex:1; max-width:320px; height:16px; background:rgba(0,0,0,.45); border:2px solid #fff; border-radius:999px; position:relative; }
+  #progressFill { height:100%; width:0%; background:linear-gradient(90deg,#00e5a0,#ffe033); border-radius:999px; }
+  #progressIcon { position:absolute; top:-7px; left:0%; font-size:18px; transform:translateX(-50%); }
+  canvas { display:block; width:100%; height:auto; background:#66c5ff; border:6px solid var(--ink); border-radius:8px; box-shadow:0 0 0 3px #fff, 0 14px 0 rgba(0,0,0,.35); }
+  #hint {
+    position:absolute; bottom:10px; left:0; right:0; text-align:center; color:#fff; font-size:13px; font-weight:bold;
+    font-family:-apple-system, Segoe UI, Arial, sans-serif; text-shadow:2px 2px 0 #000; pointer-events:none; z-index:5;
+  }
+  #overlay {
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px;
+    background:rgba(20,10,40,.85); border-radius:8px; z-index:10; text-align:center; padding:20px;
+  }
+  #overlay.show { display:flex; }
+  #overlay h2 { font-size:22px; color:var(--gold); text-shadow:3px 3px 0 #000; letter-spacing:2px; }
+  #overlay p { color:#fff; font-size:12px; max-width:480px; line-height:2; text-shadow:2px 2px 0 #000; }
+  #overlay button {
+    margin-top:6px; padding:14px 26px; font-size:12px; font-family:'Press Start 2P', monospace;
+    background:var(--hot); color:#fff; border:3px solid #fff; border-radius:6px; cursor:pointer; letter-spacing:1px;
+    box-shadow:0 5px 0 #8f1d38;
+  }
+  #overlay button:active { box-shadow:0 2px 0 #8f1d38; transform:translateY(3px); }
+</style>
+</head>
+<body>
+
+<div id="wrap">
+  <div id="hud">
+    <div class="stat">🪙 <b id="coinVal">0</b></div>
+    <div id="progress"><div id="progressFill"></div><div id="progressIcon">🛹</div></div>
+    <div class="stat">🏁 <b id="pctVal">0</b>%</div>
+  </div>
+
+  <canvas id="game" width="900" height="500"></canvas>
+
+  <div id="hint">← → trocar de pista · ↑ ou ESPAÇO pular · junte moedas e chegue ao fim da rua 🛹</div>
+
+  <div id="overlay">
+    <h2 id="overlayTitle">🏁 CHEGOU!</h2>
+    <p id="overlayText">Você chegou ao fim da rua!</p>
+    <button onclick="restart()">🔄 JOGAR DE NOVO</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   SKATE NO BAIRRO — jogo modelo da Aula 5 (corredor de 3
+   pistas, visto de trás). Base ainda VAZIA de propósito:
+   skatista, controle, moedas e objetivo (chegar ao fim da
+   rua) já funcionam, mas ainda não tem obstáculo, vida,
+   perseguidor nem níveis — isso a turma constrói nas
+   missões, uma de cada vez, sempre em cima deste código.
+   ========================================================= */
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// ---------- Mundo ----------
+const HORIZON = 165;          // altura (y) do horizonte
+const BASE_Y = 430;           // altura (y) do chão onde o skatista aparece
+const LANE_W = 190;           // largura de cada pista, perto da câmera
+const FOCAL = 9;              // controla a perspectiva (quanto mais longe, menor)
+const ROAD_HALF = LANE_W*1.5 + 24;
+const SIDEWALK = 120;
+const TRACK_LENGTH = 1000;    // metros até a chegada
+const START_SPEED = 14;       // metros por segundo
+const MAX_D = 95;             // até que distância a gente desenha
+
+let speed = START_SPEED;
+let distance = 0;
+let time = 0;
+let gameOver = false;
+let coinCount = 0;
+
+// ---------- Perspectiva ----------
+function sc(d) { return FOCAL / (FOCAL + Math.max(d, -FOCAL*0.6)); }
+function gy(d) { return HORIZON + (BASE_Y - HORIZON) * sc(d); }
+function laneX(l, d) { return W/2 + (l-1) * LANE_W * sc(d); }
+function hash(n) { const x = Math.sin(n*127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+// ---------- Skatista ----------
+const player = { lane: 1, targetLane: 1, jumpY: 0, vy: 0, onGround: true };
+const GRAVITY = 2300;
+const JUMP_SPEED = 800;
+
+// ---------- Moedas ----------
+let coins = [];
+function buildCoins() {
+  coins = [];
+  let n = 0;
+  for (let m = 30; m < TRACK_LENGTH - 30; m += 24) {
+    const lane = Math.floor(hash(n*3 + 7) * 3);
+    for (let i = 0; i < 5; i++) coins.push({ d: m + i*2.4, lane, taken: false });
+    n++;
+  }
+}
+buildCoins();
+
+// ---------- Controle ----------
+const keys = {};
+window.addEventListener('keydown', e => {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+  if (keys[e.code]) return;
+  keys[e.code] = true;
+  if (e.code === 'ArrowLeft')  player.targetLane = Math.max(0, player.targetLane - 1);
+  if (e.code === 'ArrowRight') player.targetLane = Math.min(2, player.targetLane + 1);
+  if (e.code === 'ArrowUp' || e.code === 'Space') tryJump();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+function tryJump() {
+  if (player.onGround) { player.vy = JUMP_SPEED; player.onGround = false; }
+}
+
+// ---------- Atualização ----------
+function update(dt) {
+  if (gameOver) return;
+  time += dt;
+  distance += speed * dt;
+
+  player.lane += (player.targetLane - player.lane) * Math.min(1, dt * 14);
+
+  if (!player.onGround) {
+    player.vy -= GRAVITY * dt;
+    player.jumpY += player.vy * dt;
+    if (player.jumpY <= 0) { player.jumpY = 0; player.vy = 0; player.onGround = true; }
+  }
+
+  for (const c of coins) {
+    if (c.taken) continue;
+    const d = c.d - distance;
+    if (d < 1.2 && d > -1.5 && Math.abs(player.lane - c.lane) < 0.6) {
+      c.taken = true;
+      coinCount++;
+      document.getElementById('coinVal').textContent = coinCount;
+    }
+  }
+
+  const pct = Math.min(100, distance / TRACK_LENGTH * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressIcon').style.left = pct + '%';
+  document.getElementById('pctVal').textContent = Math.floor(pct);
+  if (distance >= TRACK_LENGTH) winGame();
+}
+
+function winGame() {
+  gameOver = true;
+  document.getElementById('overlayTitle').textContent = '🏁 CHEGOU!';
+  document.getElementById('overlayText').textContent = `Você chegou ao fim da rua com ${coinCount} moedas!`;
+  document.getElementById('overlay').classList.add('show');
+}
+
+function restart() {
+  speed = START_SPEED;
+  distance = 0; time = 0;
+  coinCount = 0;
+  gameOver = false;
+  player.lane = player.targetLane = 1;
+  player.jumpY = 0; player.vy = 0; player.onGround = true;
+  buildCoins();
+  document.getElementById('coinVal').textContent = 0;
+  document.getElementById('overlay').classList.remove('show');
+}
+
+// ---------- Desenho: utilidades ----------
+function poly(pts, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  ctx.fillStyle = fill; ctx.fill();
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.min(255, (n >> 16) + amt));
+  const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
+  const b = Math.max(0, Math.min(255, (n & 255) + amt));
+  return `rgb(${r},${g},${b})`;
+}
+
+// ---------- Desenho: céu e morro ----------
+const HILL_HOUSES = Array.from({length: 70}, (_, i) => ({
+  x: i*14 + hash(i)*8, w: 8 + hash(i+50)*9, h: 8 + hash(i+90)*12,
+  c: ['#ffb703','#fb8500','#e63946','#8ecae6','#f1faee','#2a9d8f','#e76f51'][Math.floor(hash(i+130)*7)]
+}));
+function drawSky() {
+  const g = ctx.createLinearGradient(0, 0, 0, HORIZON);
+  g.addColorStop(0, '#4db8ff'); g.addColorStop(0.7, '#ffd9a0'); g.addColorStop(1, '#ffb97a');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, HORIZON + 2);
+  ctx.fillStyle = '#8f8676'; ctx.fillRect(0, HORIZON, W, H - HORIZON);
+
+  // sol
+  const sx = W*0.72, sy = HORIZON - 44;
+  const glow = ctx.createRadialGradient(sx, sy, 6, sx, sy, 90);
+  glow.addColorStop(0, 'rgba(255,240,180,.95)'); glow.addColorStop(1, 'rgba(255,240,180,0)');
+  ctx.fillStyle = glow; ctx.fillRect(sx-90, sy-90, 180, 180);
+  ctx.fillStyle = '#fff6c9'; ctx.beginPath(); ctx.arc(sx, sy, 22, 0, Math.PI*2); ctx.fill();
+
+  // nuvens
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  for (let i = 0; i < 4; i++) {
+    const cx = ((i*260 + time*8 + 60) % (W+200)) - 100, cy = 30 + i*22;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 44, 13, 0, 0, Math.PI*2);
+    ctx.ellipse(cx-28, cy+4, 26, 10, 0, 0, Math.PI*2);
+    ctx.ellipse(cx+30, cy+4, 28, 10, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // morro com casinhas coloridas ao fundo
+  ctx.fillStyle = '#6a4c93';
+  ctx.beginPath(); ctx.moveTo(0, HORIZON);
+  ctx.quadraticCurveTo(W*0.25, HORIZON-70, W*0.5, HORIZON-30);
+  ctx.quadraticCurveTo(W*0.78, HORIZON-80, W, HORIZON-22);
+  ctx.lineTo(W, HORIZON); ctx.closePath(); ctx.fill();
+  for (const h of HILL_HOUSES) {
+    const base = HORIZON - 4 - Math.abs(Math.sin(h.x*0.011))*38;
+    ctx.fillStyle = h.c; ctx.fillRect(h.x, base - h.h, h.w, h.h);
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(h.x, base - h.h, h.w, 2);
+  }
+}
+
+// ---------- Desenho: rua ----------
+function drawRoad() {
+  const dNear = -5.4;
+  const sN = sc(dNear), yN = gy(dNear);
+
+  // calçadas
+  for (const side of [-1, 1]) {
+    poly([
+      [W/2 + side*ROAD_HALF*sN, yN], [W/2 + side*(ROAD_HALF+SIDEWALK)*sN, yN],
+      [W/2 + side*(ROAD_HALF+SIDEWALK)*0.001, HORIZON], [W/2 + side*ROAD_HALF*0.001, HORIZON]
+    ], '#c9c2b8');
+  }
+  // asfalto
+  const g = ctx.createLinearGradient(0, HORIZON, 0, H);
+  g.addColorStop(0, '#5a5a66'); g.addColorStop(1, '#2f2f3a');
+  poly([[W/2 - ROAD_HALF*sN, yN], [W/2 + ROAD_HALF*sN, yN], [W/2, HORIZON], [W/2, HORIZON]], g);
+
+  // faixas tracejadas
+  const step = 4, len = 2;
+  const start = Math.floor(distance/step)*step;
+  for (const lb of [0.5, 1.5]) {
+    for (let m = start; m < distance + MAX_D; m += step) {
+      const d0 = m - distance, d1 = d0 + len;
+      if (d1 < -5) continue;
+      const w0 = 5*sc(d0), w1 = 5*sc(d1);
+      poly([
+        [laneX(lb, d0)-w0, gy(d0)], [laneX(lb, d0)+w0, gy(d0)],
+        [laneX(lb, d1)+w1, gy(d1)], [laneX(lb, d1)-w1, gy(d1)]
+      ], '#f4f1de');
+    }
+  }
+  // meio-fio
+  for (const side of [-1, 1]) {
+    poly([
+      [W/2 + side*ROAD_HALF*sN, yN], [W/2 + side*(ROAD_HALF+10)*sN, yN],
+      [W/2 + side*(ROAD_HALF+10)*0.001, HORIZON], [W/2 + side*ROAD_HALF*0.001, HORIZON]
+    ], '#e9e4da');
+  }
+}
+
+// ---------- Desenho: casas, postes e árvores ----------
+const PALETTE = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#c77dff','#ff9f1c','#2ec4b6','#f15bb5'];
+const BLOCK = 16;
+function wall(side, d0, d1, h, color, kind, seed) {
+  const F0 = d0, F1 = d1;
+  d0 = Math.max(d0, -3);
+  if (d1 <= d0) return;
+  const s0 = sc(d0), s1 = sc(d1);
+  const inner = ROAD_HALF + SIDEWALK*0.7;
+  const x0 = W/2 + side*inner*s0, x1 = W/2 + side*inner*s1;
+  const g0 = gy(d0), g1 = gy(d1);
+  poly([[x0, g0], [x1, g1], [x1, g1 - h*s1], [x0, g0 - h*s0]], color);
+  poly([[x0, g0 - h*s0], [x1, g1 - h*s1], [x1, g1 - h*s1 - 7*s1], [x0, g0 - h*s0 - 7*s0]], shade(color, -45));
+  poly([[x0, g0], [x1, g1], [x1, g1 - 12*s1], [x0, g0 - 12*s0]], 'rgba(0,0,0,.18)');
+  if (kind === 'casa') {
+    const n = Math.max(1, Math.floor((F1-F0)/4));
+    for (let i = 0; i < n; i++) {
+      const dc = F0 + (i+0.5)*(F1-F0)/n, ha = dc - 0.8, hb = dc + 0.8;
+      if (ha < -3) continue;
+      const sa = sc(ha), sb = sc(hb);
+      const xa = W/2 + side*inner*sa, xb = W/2 + side*inner*sb;
+      const ba = gy(ha), bb = gy(hb);
+      const y0 = h*0.5, y1 = h*0.78;
+      poly([[xa, ba-y0*sa], [xb, bb-y0*sb], [xb, bb-y1*sb], [xa, ba-y1*sa]], i % 2 ? '#ffe9a8' : '#bde0fe');
+    }
+    // porta
+    const dp = F0 + (F1-F0)*0.5, pa = dp - 0.7, pb = dp + 0.7;
+    if (pa > -3) {
+      const spa = sc(pa), spb = sc(pb);
+      const xa = W/2 + side*inner*spa, xb = W/2 + side*inner*spb;
+      poly([[xa, gy(pa)], [xb, gy(pb)], [xb, gy(pb)-50*spb], [xa, gy(pa)-50*spa]], shade(color, -80));
+    }
+  } else if (kind === 'muro') {
+    // grafite colorido
+    const n = 3;
+    for (let i = 0; i < n; i++) {
+      const dc = F0 + (i+0.5)*(F1-F0)/n, ha = dc - 1.1, hb = dc + 1.1;
+      if (ha < -3) continue;
+      const sa = sc(ha), sb = sc(hb);
+      const xa = W/2 + side*inner*sa, xb = W/2 + side*inner*sb;
+      const ba = gy(ha), bb = gy(hb);
+      poly([[xa, ba-h*0.2*sa], [xb, bb-h*0.2*sb], [xb, bb-h*0.8*sb], [xa, ba-h*0.8*sa]], PALETTE[(seed + i*3) % 8]);
+    }
+  }
+}
+function drawPole(side, d) {
+  if (d < -3 || d > MAX_D) return null;
+  const s = sc(d), x = W/2 + side*(ROAD_HALF + SIDEWALK*0.32)*s, y = gy(d);
+  ctx.strokeStyle = '#3d2b1f'; ctx.lineWidth = Math.max(1, 6*s);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 200*s); ctx.stroke();
+  ctx.lineWidth = Math.max(1, 4*s);
+  ctx.beginPath(); ctx.moveTo(x - 26*s, y - 190*s); ctx.lineTo(x + 26*s, y - 190*s); ctx.stroke();
+  return [x, y - 190*s];
+}
+function drawTree(side, d) {
+  if (d < -3 || d > MAX_D) return;
+  const s = sc(d), x = W/2 + side*(ROAD_HALF + SIDEWALK*0.5)*s, y = gy(d);
+  ctx.fillStyle = '#6b4226'; ctx.fillRect(x - 5*s, y - 60*s, 10*s, 60*s);
+  const g = ctx.createRadialGradient(x - 10*s, y - 100*s, 4*s, x, y - 90*s, 46*s);
+  g.addColorStop(0, '#6fdc7a'); g.addColorStop(1, '#1f8a3a');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y - 90*s, 38*s, 0, Math.PI*2); ctx.fill();
+}
+function drawScenery() {
+  const firstK = Math.floor(distance / BLOCK);
+  const lastK = Math.ceil((distance + MAX_D) / BLOCK);
+  // casas e muros: de longe pra perto
+  for (let k = lastK; k >= firstK - 1; k--) {
+    for (const side of [-1, 1]) {
+      const r = hash(k*2 + (side > 0 ? 1 : 0));
+      const base = k*BLOCK - distance;
+      if (r < 0.14) { drawTree(side, base + 8); continue; }
+      const color = PALETTE[Math.floor(hash(k*5 + side)*8)];
+      const h = 100 + hash(k*7 + side)*90;
+      const seed = ((k*2 + (side > 0 ? 1 : 0)) % 8 + 8) % 8;
+      if (r < 0.30) wall(side, base + 1, base + BLOCK - 1, 70, color, 'muro', seed);
+      else wall(side, base + 1, base + BLOCK - 1, h, color, 'casa', seed);
+    }
+  }
+  // postes e fios
+  const firstP = Math.floor(distance / 20);
+  const lastP = Math.ceil((distance + MAX_D) / 20);
+  for (const side of [-1, 1]) {
+    let prev = null;
+    for (let p = lastP; p >= firstP - 1; p--) {
+      const top = drawPole(side, p*20 - distance);
+      if (top && prev) {
+        ctx.strokeStyle = 'rgba(30,30,30,.7)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(top[0], top[1]);
+        ctx.quadraticCurveTo((top[0]+prev[0])/2, (top[1]+prev[1])/2 + 6, prev[0], prev[1]);
+        ctx.stroke();
+      }
+      prev = top;
+    }
+  }
+}
+
+// ---------- Desenho: moedas, chegada e skatista ----------
+function drawCoin(c) {
+  if (c.taken) return;
+  const d = c.d - distance;
+  if (d < -2 || d > MAX_D) return;
+  const s = sc(d), x = laneX(c.lane, d), y = gy(d) - 46*s, r = 15*s;
+  const w = Math.max(0.2, Math.abs(Math.cos(time*4 + c.d))) * r;
+  ctx.save();
+  ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = 10*s;
+  const g = ctx.createRadialGradient(x - w*0.3, y - r*0.3, 1, x, y, r);
+  g.addColorStop(0, '#fff6c8'); g.addColorStop(0.55, '#ffd23f'); g.addColorStop(1, '#b8860b');
+  ctx.fillStyle = g; ctx.strokeStyle = '#8a6300'; ctx.lineWidth = Math.max(1, 2*s);
+  ctx.beginPath(); ctx.ellipse(x, y, w, r, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+function drawFinish() {
+  const d = TRACK_LENGTH - distance;
+  if (d > MAX_D || d < -3) return;
+  const s = sc(d), y = gy(d);
+  const xl = W/2 - (ROAD_HALF + 20)*s, xr = W/2 + (ROAD_HALF + 20)*s;
+  ctx.fillStyle = '#eee';
+  ctx.fillRect(xl - 8*s, y - 230*s, 16*s, 230*s);
+  ctx.fillRect(xr - 8*s, y - 230*s, 16*s, 230*s);
+  const top = y - 230*s, bh = 46*s;
+  const sq = 12*s;
+  for (let i = 0; i * sq < xr - xl; i++) {
+    for (let j = 0; j < 4; j++) {
+      ctx.fillStyle = (i + j) % 2 ? '#111' : '#fff';
+      ctx.fillRect(xl + i*sq, top + j*(bh/4), sq, bh/4);
+    }
+  }
+  ctx.fillStyle = '#ff4d6d';
+  ctx.font = `bold ${Math.max(6, 26*s)}px 'Press Start 2P', monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('CHEGADA', W/2, top + bh + 30*s);
+  ctx.textAlign = 'left';
+}
+
+function drawPlayer() {
+  const x = laneX(player.lane, 0);
+  const jy = player.jumpY;
+  const bob = player.onGround ? Math.sin(time*16) * 1.6 : 0;
+  const lean = (player.targetLane - player.lane) * 0.28;
+  const air = jy > 4;
+
+  // sombra
+  ctx.save();
+  ctx.globalAlpha = Math.max(0.1, 0.32 - jy/650);
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.ellipse(x, BASE_Y + 12, 48 - jy*0.1, 11 - jy*0.02, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(x, BASE_Y - jy + bob);
+  ctx.rotate(lean);
+
+  // skate (shape visto de trás)
+  const deck = ctx.createLinearGradient(0, -20, 0, -6);
+  deck.addColorStop(0, '#ff8fab'); deck.addColorStop(1, '#ff4d6d');
+  ctx.fillStyle = deck; ctx.strokeStyle = '#7a1230'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(-44, -20, 88, 13, 6); else ctx.rect(-44, -20, 88, 13);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.fillRect(-30, -16, 60, 3);
+  ctx.fillStyle = '#222';
+  for (const wx of [-32, 32]) { ctx.beginPath(); ctx.arc(wx, -3, 7, 0, Math.PI*2); ctx.fill(); }
+  ctx.fillStyle = '#ddd';
+  for (const wx of [-32, 32]) { ctx.beginPath(); ctx.arc(wx, -3, 2.6, 0, Math.PI*2); ctx.fill(); }
+
+  // pernas (calça jeans) + tênis
+  const knee = air ? 8 : 0;
+  ctx.fillStyle = '#2f5d9e';
+  ctx.fillRect(-25, -74 + knee, 16, 56 - knee);
+  ctx.fillRect(9, -74 + knee, 16, 56 - knee);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-28, -24, 21, 8); ctx.fillRect(7, -24, 21, 8);
+
+  // camiseta
+  const shirt = ctx.createLinearGradient(-30, -130, 30, -68);
+  shirt.addColorStop(0, '#ff5a5a'); shirt.addColorStop(1, '#c81e3a');
+  ctx.fillStyle = shirt;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(-30, -132, 60, 64, 9); else ctx.rect(-30, -132, 60, 64);
+  ctx.fill();
+
+  // braços (equilíbrio)
+  const swing = air ? -16 : Math.sin(time*9) * 5;
+  ctx.strokeStyle = '#c68642'; ctx.lineWidth = 12; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-28, -122); ctx.lineTo(-54, -96 + swing); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(28, -122); ctx.lineTo(54, -96 - swing); ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // mochila amarela
+  const bag = ctx.createLinearGradient(-22, -126, 22, -82);
+  bag.addColorStop(0, '#ffe066'); bag.addColorStop(1, '#f5b700');
+  ctx.fillStyle = bag; ctx.strokeStyle = '#a87900'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(-22, -124, 44, 44, 8); else ctx.rect(-22, -124, 44, 44);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#a87900'; ctx.fillRect(-10, -104, 20, 3);
+
+  // cabeça + boné
+  ctx.fillStyle = '#c68642';
+  ctx.beginPath(); ctx.arc(0, -150, 17, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1f6feb';
+  ctx.beginPath(); ctx.arc(0, -154, 18, Math.PI*1.02, Math.PI*1.98); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#174ea6'; ctx.fillRect(-18, -156, 36, 5);
+  ctx.fillStyle = '#2b2118'; ctx.fillRect(-17, -148, 34, 9);
+
+  ctx.restore();
+}
+
+// ---------- Desenho: tudo junto ----------
+function draw() {
+  drawSky();
+  drawRoad();
+  drawScenery();
+  drawFinish();
+  for (let i = coins.length - 1; i >= 0; i--) drawCoin(coins[i]);
+  drawPlayer();
+}
+
+// ---------- Loop principal ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
