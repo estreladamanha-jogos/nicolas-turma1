@@ -113,6 +113,15 @@ let rainDrops = [];
 let lightning = null;             // { lane, warn, flash, struck }
 let nextLightningAt = null;
 
+// ---------- Cachorro perseguidor ----------
+const DOG_FOLLOW_SPEED = 8;      // troca de pista mais devagar que o skatista, fica "atrasado" atrás dele
+const DOG_APPROACH_RATE = 0.018; // o quanto o cachorro se aproxima por segundo, sozinho
+const DOG_HIT_JUMP = 0.16;       // o quanto o cachorro se aproxima de vez, a cada obstáculo batido
+const HINT_DEFAULT = document.getElementById('hint').textContent;
+let dogChasing = false;
+let dogCloseness = 0;  // 0 = ainda longe, 1 = alcançou o skatista
+const dog = { lane: 1 };
+
 function buildRain() {
   rainDrops = [];
   for (let i = 0; i < 90; i++) {
@@ -205,6 +214,7 @@ function update(dt) {
     updateRain(dt);
     updateLightning(dt);
   }
+  updateDog(dt);
 
   for (const c of coins) {
     if (c.taken) continue;
@@ -252,7 +262,24 @@ function hitObstacle() {
   updateHearts();
   hitFlash = 1;
   player.invincible = INVINCIBLE_TIME;
+  if (!dogChasing) {
+    // primeiro obstáculo batido: o cachorro bravo começa a te perseguir
+    dogChasing = true;
+    dog.lane = player.lane;
+    dogCloseness = 0.12;
+    document.getElementById('hint').textContent = '🐕 Um cachorro bravo tá te perseguindo! Foge!';
+  } else {
+    // já tava perseguindo: cada tombo deixa o cachorro mais perto
+    dogCloseness = Math.min(1, dogCloseness + DOG_HIT_JUMP);
+  }
   if (lives <= 0) loseGame('Você é muito, jogue novamente.');
+}
+
+function updateDog(dt) {
+  if (!dogChasing || gameOver) return;
+  dogCloseness = Math.min(1, dogCloseness + DOG_APPROACH_RATE * dt);
+  dog.lane += (player.lane - dog.lane) * Math.min(1, dt * DOG_FOLLOW_SPEED);
+  if (dogCloseness >= 1) loseGame('O cachorro estava com muita fome.');
 }
 
 function updateRain(dt) {
@@ -319,6 +346,10 @@ function restart() {
   rainDrops = [];
   lightning = null;
   nextLightningAt = null;
+  dogChasing = false;
+  dogCloseness = 0;
+  dog.lane = 1;
+  document.getElementById('hint').textContent = HINT_DEFAULT;
   buildCoins();
   buildObstacles();
   document.getElementById('coinVal').textContent = 0;
@@ -815,6 +846,77 @@ function drawFinish() {
   ctx.textAlign = 'left';
 }
 
+// ---------- Desenho: cachorro perseguidor ----------
+function drawDog() {
+  if (!dogChasing) return;
+  const x = laneX(dog.lane, 0);
+  const scale = 0.55 + 0.45 * dogCloseness;   // cresce conforme se aproxima
+  const yOff = 60 - 55 * dogCloseness;        // some atrás do skatista até quase alcançar
+  const y = BASE_Y + yOff;
+  const bob = Math.sin(time * 18) * 3;
+
+  ctx.save();
+  ctx.translate(x, y + bob);
+  ctx.scale(scale, scale);
+
+  // sombra
+  ctx.fillStyle = 'rgba(0,0,0,.3)';
+  ctx.beginPath(); ctx.ellipse(0, 20, 34, 8, 0, 0, Math.PI*2); ctx.fill();
+
+  // pernas correndo
+  const legSwing = Math.sin(time * 22) * 7;
+  ctx.fillStyle = '#2e2018';
+  ctx.fillRect(-22, -8, 9, 24 + legSwing);
+  ctx.fillRect(13, -8, 9, 24 - legSwing);
+
+  // rabo levantado e bravo
+  ctx.strokeStyle = '#2e2018'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, -32); ctx.quadraticCurveTo(24, -52, 14, -72); ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // corpo
+  const bodyGrad = ctx.createLinearGradient(-30, -48, 30, 4);
+  bodyGrad.addColorStop(0, '#5a4030'); bodyGrad.addColorStop(1, '#2e2018');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath(); ctx.ellipse(0, -22, 30, 24, 0, 0, Math.PI*2); ctx.fill();
+
+  // cabeça
+  ctx.fillStyle = '#4a3222';
+  ctx.beginPath(); ctx.ellipse(0, -54, 22, 19, 0, 0, Math.PI*2); ctx.fill();
+
+  // orelhas em pé, bravo
+  ctx.fillStyle = '#3a2818';
+  ctx.beginPath(); ctx.moveTo(-17, -65); ctx.lineTo(-26, -87); ctx.lineTo(-6, -72); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(17, -65); ctx.lineTo(26, -87); ctx.lineTo(6, -72); ctx.closePath(); ctx.fill();
+
+  // focinho e boca aberta rosnando
+  ctx.fillStyle = '#3a2818';
+  ctx.beginPath(); ctx.ellipse(0, -42, 14, 10, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1a0f0a';
+  ctx.beginPath(); ctx.ellipse(0, -37, 11, 7, 0, 0, Math.PI*2); ctx.fill();
+
+  // dentes
+  ctx.fillStyle = '#fdfdf4';
+  for (const tx of [-7, 0, 7]) {
+    ctx.beginPath();
+    ctx.moveTo(tx - 3, -42); ctx.lineTo(tx + 3, -42); ctx.lineTo(tx, -35);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // olhos vermelhos e bravos
+  ctx.save();
+  ctx.shadowColor = '#ff2222'; ctx.shadowBlur = 8;
+  ctx.fillStyle = '#ff2222';
+  ctx.beginPath(); ctx.arc(-9, -58, 3.4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(9, -58, 3.4, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = '#1a0f0a'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(-14, -64); ctx.lineTo(-4, -61); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(14, -64); ctx.lineTo(4, -61); ctx.stroke();
+
+  ctx.restore();
+}
+
 function drawPlayer() {
   // enquanto invencível, o skatista pisca (some a cada ~0,1s)
   if (player.invincible > 0 && Math.floor(player.invincible * 10) % 2 === 0) return;
@@ -901,6 +1003,7 @@ function draw() {
   for (let i = coins.length - 1; i >= 0; i--) drawCoin(coins[i]);
   for (let i = obstacles.length - 1; i >= 0; i--) drawObstacle(obstacles[i]);
   if (raining) drawLightning();
+  drawDog();
   drawPlayer();
   if (raining) drawRain();
   if (hitFlash > 0) {
