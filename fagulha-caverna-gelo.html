@@ -181,12 +181,22 @@ function resetar() {
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; ouros = []; imas = []; fx = [];
   spawnT = 1.5; gemT = 1; ouroT = 3; imaT = 6;
   banner = { txt: 'FASE 1: CAVERNA DE GELO', sub: toque ? 'BOTÃO 🔥 = JATO DE FOGO' : 'ESPAÇO = JATO DE FOGO', t: 2.6 };
+  atualizarBotaoFogo();
 }
 
 function avancarFase() {
   fase = 2; dist = 0; obst = []; gems = []; ouros = []; imas = []; fx = [];
   spawnT = 1.5; gemT = 1; ouroT = 3; imaT = 4; nevasca = false; nevT = 0; terremoto = false; termT = 0;
-  banner = { txt: 'FASE 2: MINAS DE CRISTAL', sub: 'ESPAÇO ATIVA O ÍMÃ 🧲 POR 20s', t: 3 };
+  banner = { txt: 'FASE 2: SEM FOGO!', sub: 'ESPAÇO ATIVA O ÍMÃ 🧲 POR 20s', t: 3 };
+  atualizarBotaoFogo();
+}
+
+/* ---------- troca o ícone do botão de toque: 🔥 na fase 1, 🧲 na fase 2 ---------- */
+function atualizarBotaoFogo() {
+  const b = document.getElementById('btnFogo');
+  b.textContent = fase === 2 ? '🧲' : '🔥';
+  b.style.background = fase === 2 ? '#6a2f8f' : '#ff7a2a';
+  b.style.boxShadow = fase === 2 ? '0 4px 0 #3a1a52' : '0 4px 0 #9a3c08';
 }
 
 /* ---------- tenta ativar o poder do ímã (só na fase 2, se tiver carga guardada) ---------- */
@@ -197,14 +207,21 @@ function tentarAtivarIma() {
   }
 }
 
-/* ---------- obstáculos de gelo/rocha (e minas de ouro ou cristal) ---------- */
+/* ---------- obstáculos de gelo/rocha (e minas de ouro na fase 1) ---------- */
 function criarObstaculo() {
   const r = Math.random(), lado = Math.random() < .5 ? -1 : 1;
   let o;
-  if (r < .2) o = { tp: 'lateral', lado, w: rnd(110, 170), h: 34 };          // espinhos saindo da parede
-  else if (r < .36) o = { tp: 'bloco', w: rnd(58, 84), h: rnd(48, 62) };      // bloco de gelo/rocha
-  else if (r < .5) o = { tp: 'mina', w: rnd(60, 86), h: rnd(50, 64) };        // mina (veio de ouro ou de cristal)
-  else o = { tp: 'espinho', w: rnd(56, 96), h: rnd(48, 66) };                  // espinhos
+  if (fase === 2) {
+    // fase 2 não tem fogo, então não tem minas pra quebrar - só obstáculos pra desviar
+    if (r < .3) o = { tp: 'lateral', lado, w: rnd(110, 170), h: 34 };          // espinhos saindo da parede
+    else if (r < .55) o = { tp: 'bloco', w: rnd(58, 84), h: rnd(48, 62) };     // bloco de cristal
+    else o = { tp: 'espinho', w: rnd(56, 96), h: rnd(48, 66) };                 // espinhos de cristal
+  } else {
+    if (r < .2) o = { tp: 'lateral', lado, w: rnd(110, 170), h: 34 };          // espinhos saindo da parede
+    else if (r < .36) o = { tp: 'bloco', w: rnd(58, 84), h: rnd(48, 62) };      // bloco de gelo
+    else if (r < .5) o = { tp: 'mina', w: rnd(60, 86), h: rnd(50, 64) };        // mina de ouro
+    else o = { tp: 'espinho', w: rnd(56, 96), h: rnd(48, 66) };                  // espinhos de gelo
+  }
   o.x = o.lado ? (o.lado < 0 ? 34 + o.w / 2 : W - 34 - o.w / 2) : rnd(50 + o.w / 2, W - 50 - o.w / 2);
   o.y = H + 40; o.hp = (o.tp === 'bloco' || o.tp === 'mina') ? .7 : .4; o.max = o.hp; o.sd = Math.random();
   obst.push(o);
@@ -341,7 +358,7 @@ function update(dt) {
   if (shake > 0) shake -= dt;
   if (imaAtivo > 0) imaAtivo -= dt;
 
-  // ---- fase 1: nevasca a cada 16s (dura 7s)   •   fase 2: terremoto de pedra a cada 14s (dura 5s) ----
+  // ---- fase 1: nevasca a cada 16s (dura 7s)   •   fase 2: terremoto de espinhos de cristal a cada 30s (dura 6s) ----
   if (fase === 1) {
     nevT += dt;
     const ciclo = nevT % 16;
@@ -350,18 +367,24 @@ function update(dt) {
     nevasca = nv;
   } else {
     termT += dt;
-    const ciclo = termT % 14;
-    const tr = ciclo > 9;
-    if (tr && !terremoto) banner = { txt: 'TERREMOTO!', sub: 'PEDRAS CAINDO - CUIDADO!', t: 2.4 };
+    const ciclo = termT % 30;
+    const tr = ciclo > 24;
+    if (tr && !terremoto) banner = { txt: 'TERREMOTO DE CRISTAL!', sub: 'ESPINHOS CAINDO - CUIDADO!', t: 2.4 };
     terremoto = tr;
     if (terremoto) {
-      shake = Math.max(shake, .14);
-      if (Math.random() < dt * 6) burst(rnd(40, W - 40), rnd(100, 400), '#cbb7e6', 3, 60);
+      shake = Math.max(shake, .16);
+      if (Math.random() < dt * 5) burst(rnd(40, W - 40), rnd(100, 400), '#d9b8ff', 4, 70);
+      // chove espinho de cristal extra direto, além dos obstáculos normais
+      if (Math.random() < dt * 2) {
+        const o = { tp: 'espinho', w: rnd(50, 80), h: rnd(50, 70) };
+        o.x = rnd(50 + o.w / 2, W - 50 - o.w / 2); o.y = H + 40; o.hp = .4; o.max = .4; o.sd = Math.random();
+        obst.push(o);
+      }
     }
   }
 
-  // ---- fogo infinito: é só segurar ESPAÇO ----
-  fogo = keys.fogo;
+  // ---- fogo infinito: é só segurar ESPAÇO (na fase 2 o poder de fogo é desligado) ----
+  fogo = fase === 2 ? false : keys.fogo;
 
   // ---- movimento do Fagulha ----
   const ax = (keys.left ? -1 : 0) + (keys.right ? 1 : 0);
@@ -514,10 +537,11 @@ function fundo() {
     }
   }
 
-  // cristais pequenos brilhando no fundo
-  for (let k = 0; k < 14; k++) {
+  // cristais pequenos brilhando no fundo (mais deles e mais roxos na fase 2)
+  const qtdBrilho = fase === 2 ? 22 : 14;
+  for (let k = 0; k < qtdBrilho; k++) {
     const sx = (k * 97) % (W - 100) + 50, sy = ((k * 173 - dist * .5) % (H + 40) + H + 40) % (H + 40) - 20;
-    c.globalAlpha = .35 + .35 * Math.sin(t * 3 + k); c.fillStyle = '#e8fbff';
+    c.globalAlpha = .35 + .35 * Math.sin(t * 3 + k); c.fillStyle = fase === 2 ? '#e8c6ff' : '#e8fbff';
     c.beginPath(); c.moveTo(sx, sy - 4); c.lineTo(sx + 2, sy); c.lineTo(sx, sy + 4); c.lineTo(sx - 2, sy); c.fill();
   }
   c.globalAlpha = 1;
@@ -677,7 +701,7 @@ function telas() {
     drawFagulha(c, W / 2, 300, .85, agora, { pose: 'stand', glow: '#ff8a2a' });
     texto(toque ? '◀ ▶ MOVER   🔥 FOGO' : '← → MOVER   ESPAÇO = FOGO', W / 2, 448, 9, '#fff');
     texto('FASE 1: CAVERNA DE GELO E OURO', W / 2, 472, 8, '#ffb02a');
-    texto('FASE 2: CRISTAL + TERREMOTO + 🧲', W / 2, 496, 8, '#9ad8ff');
+    texto('FASE 2: SEM FOGO! SÓ ÍMÃ 🧲 A CADA 30s', W / 2, 496, 7, '#9ad8ff');
     if (pisca) texto(toque ? 'TOQUE PARA JOGAR' : 'APERTE ESPAÇO', W / 2, 545, 14, '#fff');
   } else if (estado === 'gameover') {
     c.fillStyle = 'rgba(30,0,10,.75)'; c.fillRect(0, 0, W, H);
