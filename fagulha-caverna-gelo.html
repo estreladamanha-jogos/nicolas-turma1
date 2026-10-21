@@ -147,6 +147,7 @@ const VEL = 240;                // velocidade da queda (pixels por segundo)
 const META = 6000;              // distância até o fundo (6000 = 600 m)
 const CRISTAIS_POR_VIDA = 15;   // junta 15 cristais pra recuperar 1 coração perdido
 const IMA_MAX = 8;              // só existem 8 ímãs na fase inteira
+const IMA_DURACAO = 20;         // o poder do ímã dura 20 segundos quando ativado
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
 const toque = matchMedia('(hover: none) and (pointer: coarse)').matches;   // é celular?
@@ -166,8 +167,8 @@ let estado = 'inicio';          // inicio | jogando | gameover | vitoria
 let fase = 1;                   // 1 = caverna de gelo (ouro)   2 = minas de cristal (ímã)
 let t = 0, dist = 0;
 let vidas = 3, invenc = 0, cristais = 0, cristaisVida = 0, ouro = 0, derretidos = 0, shake = 0;
-let imasSpawned = 0, imaColetados = 0, imaAtivo = 0;
-let nevasca = false, nevT = 0, banner = null, fogo = false;
+let imasSpawned = 0, imaColetados = 0, imaCarga = 0, imaAtivo = 0;
+let nevasca = false, nevT = 0, terremoto = false, termT = 0, banner = null, fogo = false;
 const jog = { x: W / 2, vx: 0 };
 let obst = [], gems = [], ouros = [], imas = [], fx = [], neve = [];
 let spawnT = 1, gemT = 1, ouroT = 3, imaT = 6;
@@ -175,8 +176,8 @@ const keys = { left: false, right: false, fogo: false };
 
 function resetar() {
   estado = 'jogando'; fase = 1; t = 0; dist = 0; vidas = 3; invenc = 0; cristais = 0; cristaisVida = 0; ouro = 0; derretidos = 0; shake = 0;
-  imasSpawned = 0; imaColetados = 0; imaAtivo = 0;
-  nevasca = false; nevT = 0; fogo = false;
+  imasSpawned = 0; imaColetados = 0; imaCarga = 0; imaAtivo = 0;
+  nevasca = false; nevT = 0; terremoto = false; termT = 0; fogo = false;
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; ouros = []; imas = []; fx = [];
   spawnT = 1.5; gemT = 1; ouroT = 3; imaT = 6;
   banner = { txt: 'FASE 1: CAVERNA DE GELO', sub: toque ? 'BOTÃO 🔥 = JATO DE FOGO' : 'ESPAÇO = JATO DE FOGO', t: 2.6 };
@@ -184,8 +185,16 @@ function resetar() {
 
 function avancarFase() {
   fase = 2; dist = 0; obst = []; gems = []; ouros = []; imas = []; fx = [];
-  spawnT = 1.5; gemT = 1; ouroT = 3; imaT = 4; nevasca = false; nevT = 0;
-  banner = { txt: 'FASE 2: MINAS DE CRISTAL', sub: 'AGORA O ÍMÃ 🧲 PODE APARECER!', t: 3 };
+  spawnT = 1.5; gemT = 1; ouroT = 3; imaT = 4; nevasca = false; nevT = 0; terremoto = false; termT = 0;
+  banner = { txt: 'FASE 2: MINAS DE CRISTAL', sub: 'ESPAÇO ATIVA O ÍMÃ 🧲 POR 20s', t: 3 };
+}
+
+/* ---------- tenta ativar o poder do ímã (só na fase 2, se tiver carga guardada) ---------- */
+function tentarAtivarIma() {
+  if (fase === 2 && estado === 'jogando' && imaCarga > 0 && imaAtivo <= 0) {
+    imaCarga--; imaAtivo = IMA_DURACAO; burst(jog.x, PY, '#9ad8ff', 14, 130);
+    banner = { txt: '🧲 ÍMÃ ATIVADO!', sub: 'PUXA CRISTAIS POR 20s', t: 2 };
+  }
 }
 
 /* ---------- obstáculos de gelo/rocha (e minas de ouro ou cristal) ---------- */
@@ -292,7 +301,7 @@ addEventListener('keydown', e => {
   if (estado !== 'jogando') { if (!e.repeat && (k === 'Space' || k === 'Enter' || k === 'KeyR')) resetar(); return; }
   if (k === 'ArrowLeft' || k === 'KeyA') keys.left = true;
   if (k === 'ArrowRight' || k === 'KeyD') keys.right = true;
-  if (k === 'Space') keys.fogo = true;
+  if (k === 'Space') { keys.fogo = true; if (!e.repeat) tentarAtivarIma(); }
 });
 addEventListener('keyup', e => {
   if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
@@ -306,7 +315,10 @@ function botao(id, tecla) {
   b.addEventListener('pointerdown', e => { e.preventDefault(); if (estado !== 'jogando') { resetar(); return; } keys[tecla] = true; });
   for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => keys[tecla] = false);
 }
-botao('btnEsq', 'left'); botao('btnDir', 'right'); botao('btnFogo', 'fogo');
+botao('btnEsq', 'left'); botao('btnDir', 'right');
+const btnFogo = document.getElementById('btnFogo');
+btnFogo.addEventListener('pointerdown', e => { e.preventDefault(); if (estado !== 'jogando') { resetar(); return; } keys.fogo = true; tentarAtivarIma(); });
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btnFogo.addEventListener(ev, () => keys.fogo = false);
 cv.addEventListener('pointerdown', () => { if (estado !== 'jogando') resetar(); });
 
 /* ---------- atualização ---------- */
@@ -329,12 +341,24 @@ function update(dt) {
   if (shake > 0) shake -= dt;
   if (imaAtivo > 0) imaAtivo -= dt;
 
-  // ---- nevasca: a cada 16 s, dura 7 s ----
-  nevT += dt;
-  const ciclo = nevT % 16;
-  const nv = ciclo > 9;
-  if (nv && !nevasca) banner = { txt: 'NEVASCA!', sub: 'CUIDADO COM O VENTO', t: 2.4 };
-  nevasca = nv;
+  // ---- fase 1: nevasca a cada 16s (dura 7s)   •   fase 2: terremoto de pedra a cada 14s (dura 5s) ----
+  if (fase === 1) {
+    nevT += dt;
+    const ciclo = nevT % 16;
+    const nv = ciclo > 9;
+    if (nv && !nevasca) banner = { txt: 'NEVASCA!', sub: 'CUIDADO COM O VENTO', t: 2.4 };
+    nevasca = nv;
+  } else {
+    termT += dt;
+    const ciclo = termT % 14;
+    const tr = ciclo > 9;
+    if (tr && !terremoto) banner = { txt: 'TERREMOTO!', sub: 'PEDRAS CAINDO - CUIDADO!', t: 2.4 };
+    terremoto = tr;
+    if (terremoto) {
+      shake = Math.max(shake, .14);
+      if (Math.random() < dt * 6) burst(rnd(40, W - 40), rnd(100, 400), '#cbb7e6', 3, 60);
+    }
+  }
 
   // ---- fogo infinito: é só segurar ESPAÇO ----
   fogo = keys.fogo;
@@ -348,7 +372,8 @@ function update(dt) {
 
   // ---- obstáculos ----
   spawnT -= dt;
-  if (spawnT <= 0) { criarObstaculo(); spawnT = (nevasca ? .6 : .95) * rnd(.8, 1.2); }
+  const corre = nevasca || terremoto;
+  if (spawnT <= 0) { criarObstaculo(); spawnT = (corre ? .6 : .95) * rnd(.8, 1.2); }
   for (const o of obst) o.y -= VEL * dt;
 
   // ---- jato de fogo derrete o gelo (e as minas de ouro) embaixo do Fagulha ----
@@ -410,8 +435,8 @@ function update(dt) {
   for (const g of imas) g.y -= VEL * dt;
   imas = imas.filter(g => {
     if (Math.abs(g.x - jog.x) < 30 && Math.abs(g.y - (PY + 4)) < 46) {
-      imaColetados++; imaAtivo = 6; burst(g.x, g.y, '#9ad8ff', 14, 130);
-      banner = { txt: '🧲 ÍMÃ ATIVADO!', sub: 'PUXA CRISTAIS E OURO POR 6s', t: 2 };
+      imaColetados++; imaCarga++; burst(g.x, g.y, '#9ad8ff', 14, 130);
+      banner = { txt: '🧲 ÍMÃ GUARDADO!', sub: 'APERTE ESPAÇO PRA USAR', t: 2 };
       return false;
     }
     return g.y > -30;
@@ -463,15 +488,29 @@ function fundo() {
     c.stroke();
   }
 
-  // colunas distantes (andam mais devagar = profundidade)
+  // colunas distantes (andam mais devagar = profundidade): gelo na fase 1, cristais facetados na fase 2
   const p1 = (dist * .35) % 260;
   for (let k = -1; k < 4; k++) {
     for (const [cx, w] of [[110, 46], [300, 60]]) {
       const y = k * 260 - p1 + (cx === 300 ? 130 : 0);
-      const gc = c.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0);
-      gc.addColorStop(0, 'rgba(150,215,255,.05)'); gc.addColorStop(.5, 'rgba(200,240,255,.14)'); gc.addColorStop(1, 'rgba(150,215,255,.05)');
-      c.fillStyle = gc;
-      c.beginPath(); c.moveTo(cx - w / 2, y); c.lineTo(cx, y - 40); c.lineTo(cx + w / 2, y); c.lineTo(cx + w / 2 - 6, y + 200); c.lineTo(cx, y + 230); c.lineTo(cx - w / 2 + 6, y + 200); c.closePath(); c.fill();
+      if (fase === 2) {
+        // aglomerado de cristais pontudos saindo da rocha
+        for (const [dx, dw, dh] of [[-w * .22, w * .55, 180], [w * .2, w * .65, 230], [0, w * .4, 130]]) {
+          const gc = c.createLinearGradient(cx + dx - dw / 2, y, cx + dx + dw / 2, y + dh);
+          gc.addColorStop(0, 'rgba(230,190,255,.22)'); gc.addColorStop(.5, 'rgba(190,120,240,.18)'); gc.addColorStop(1, 'rgba(120,60,180,.04)');
+          c.fillStyle = gc;
+          c.beginPath();
+          c.moveTo(cx + dx, y); c.lineTo(cx + dx - dw / 2, y + dh * .45); c.lineTo(cx + dx - dw * .18, y + dh);
+          c.lineTo(cx + dx + dw * .18, y + dh); c.lineTo(cx + dx + dw / 2, y + dh * .45); c.closePath(); c.fill();
+          c.strokeStyle = 'rgba(255,255,255,.2)'; c.lineWidth = 1;
+          c.beginPath(); c.moveTo(cx + dx, y); c.lineTo(cx + dx - dw * .1, y + dh * .6); c.stroke();
+        }
+      } else {
+        const gc = c.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0);
+        gc.addColorStop(0, 'rgba(150,215,255,.05)'); gc.addColorStop(.5, 'rgba(200,240,255,.14)'); gc.addColorStop(1, 'rgba(150,215,255,.05)');
+        c.fillStyle = gc;
+        c.beginPath(); c.moveTo(cx - w / 2, y); c.lineTo(cx, y - 40); c.lineTo(cx + w / 2, y); c.lineTo(cx + w / 2 - 6, y + 200); c.lineTo(cx, y + 230); c.lineTo(cx - w / 2 + 6, y + 200); c.closePath(); c.fill();
+      }
     }
   }
 
@@ -512,7 +551,7 @@ function fundo() {
 }
 
 function desenharNeve() {
-  c.fillStyle = '#ffffff';
+  c.fillStyle = fase === 2 ? '#e3c6ff' : '#ffffff';   // poeira de cristal na fase 2, neve na fase 1
   for (const p of neve) { c.globalAlpha = p.a; c.beginPath(); c.arc(p.x, p.y, p.r, 0, 7); c.fill(); }
   c.globalAlpha = 1;
 }
@@ -584,8 +623,9 @@ function desenhar() {
   c.globalAlpha = 1;
   desenharNeve();
 
-  // névoa branca da nevasca
+  // névoa branca da nevasca ou poeira do terremoto
   if (nevasca) { c.fillStyle = 'rgba(225,242,255,.2)'; c.fillRect(0, 0, W, H); }
+  if (terremoto) { c.fillStyle = 'rgba(150,100,180,.15)'; c.fillRect(0, 0, W, H); }
   // geada nos cantos da tela
   const v = c.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .75);
   v.addColorStop(0, 'rgba(200,240,255,0)'); v.addColorStop(1, 'rgba(200,240,255,.35)');
@@ -612,7 +652,7 @@ function hud() {
   texto('💎 ' + cristais, W - 14, 22, 11, '#7af6ff', 'right');
   texto('🥇 ' + ouro, W - 14, 42, 11, '#ffd23a', 'right');
   texto('FASE ' + fase, W / 2, 22, 10, '#ffe9a8');
-  if (fase === 2) texto('🧲 ' + imaColetados + '/' + IMA_MAX, W / 2, 42, 10, '#9ad8ff');
+  if (fase === 2) texto('🧲 ' + imaCarga + ' [ESPAÇO]', W / 2, 42, 9, '#9ad8ff');
   else texto('🔥 ' + derretidos, W / 2, 42, 10, '#ffb02a');
   // barra de progresso
   const pr = clamp(dist / META, 0, 1);
@@ -637,7 +677,7 @@ function telas() {
     drawFagulha(c, W / 2, 300, .85, agora, { pose: 'stand', glow: '#ff8a2a' });
     texto(toque ? '◀ ▶ MOVER   🔥 FOGO' : '← → MOVER   ESPAÇO = FOGO', W / 2, 448, 9, '#fff');
     texto('FASE 1: CAVERNA DE GELO E OURO', W / 2, 472, 8, '#ffb02a');
-    texto('FASE 2: MINAS DE CRISTAL + 🧲 ÍMÃ', W / 2, 496, 8, '#9ad8ff');
+    texto('FASE 2: CRISTAL + TERREMOTO + 🧲', W / 2, 496, 8, '#9ad8ff');
     if (pisca) texto(toque ? 'TOQUE PARA JOGAR' : 'APERTE ESPAÇO', W / 2, 545, 14, '#fff');
   } else if (estado === 'gameover') {
     c.fillStyle = 'rgba(30,0,10,.75)'; c.fillRect(0, 0, W, H);
