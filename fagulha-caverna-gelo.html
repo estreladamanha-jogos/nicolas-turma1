@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Fagulha — Caverna de Gelo</title>
+<title>Fagulha — Minas de Gelo e Cristal</title>
 <!-- fonte de videogame -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,7 +32,7 @@
 </style>
 </head>
 <body>
-<header><h1>FAGULHA: CAVERNA DE GELO</h1></header>
+<header><h1>FAGULHA: MINAS DE GELO E CRISTAL</h1></header>
 <main>
   <canvas id="game" width="420" height="640"></canvas>
 </main>
@@ -154,7 +154,16 @@ const toque = matchMedia('(hover: none) and (pointer: coarse)').matches;   // é
 // formato da parede de gelo (fica ondulada e irregular)
 const borda = y => 34 + 9 * Math.sin(y * .013) + 5 * Math.sin(y * .041 + 1) + 3 * Math.sin(y * .11);
 
+// paleta de cada fase: 1 = caverna de gelo (minas de ouro), 2 = minas de cristal
+const TEMA = {
+  1: { ceu1: '#0f3456', ceu2: '#0a2340', ceu3: '#06142a', parede1: '#2a6d9c', parede2: '#7cc6ea', parede3: '#e6f8ff',
+       bloco1: '#ffffff', bloco2: '#bff0ff', bloco3: '#4fb0e0', veio: '255,210,58', veioClara: '255,232,150', brilho: 'rgba(120,255,200,.10)' },
+  2: { ceu1: '#3a1550', ceu2: '#260e38', ceu3: '#13051e', parede1: '#6a2f8f', parede2: '#c27bf0', parede3: '#f6e6ff',
+       bloco1: '#ffffff', bloco2: '#e3c6ff', bloco3: '#a24fe0', veio: '122,246,255', veioClara: '200,250,255', brilho: 'rgba(230,140,255,.12)' }
+};
+
 let estado = 'inicio';          // inicio | jogando | gameover | vitoria
+let fase = 1;                   // 1 = caverna de gelo (ouro)   2 = minas de cristal (ímã)
 let t = 0, dist = 0;
 let vidas = 3, invenc = 0, cristais = 0, cristaisVida = 0, ouro = 0, derretidos = 0, shake = 0;
 let imasSpawned = 0, imaColetados = 0, imaAtivo = 0;
@@ -165,22 +174,28 @@ let spawnT = 1, gemT = 1, ouroT = 3, imaT = 6;
 const keys = { left: false, right: false, fogo: false };
 
 function resetar() {
-  estado = 'jogando'; t = 0; dist = 0; vidas = 3; invenc = 0; cristais = 0; cristaisVida = 0; ouro = 0; derretidos = 0; shake = 0;
+  estado = 'jogando'; fase = 1; t = 0; dist = 0; vidas = 3; invenc = 0; cristais = 0; cristaisVida = 0; ouro = 0; derretidos = 0; shake = 0;
   imasSpawned = 0; imaColetados = 0; imaAtivo = 0;
   nevasca = false; nevT = 0; fogo = false;
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; ouros = []; imas = []; fx = [];
   spawnT = 1.5; gemT = 1; ouroT = 3; imaT = 6;
-  banner = { txt: 'CAVERNA DE GELO', sub: toque ? 'BOTÃO 🔥 = JATO DE FOGO' : 'ESPAÇO = JATO DE FOGO', t: 2.6 };
+  banner = { txt: 'FASE 1: CAVERNA DE GELO', sub: toque ? 'BOTÃO 🔥 = JATO DE FOGO' : 'ESPAÇO = JATO DE FOGO', t: 2.6 };
 }
 
-/* ---------- obstáculos de gelo (e minas de ouro) ---------- */
+function avancarFase() {
+  fase = 2; dist = 0; obst = []; gems = []; ouros = []; imas = []; fx = [];
+  spawnT = 1.5; gemT = 1; ouroT = 3; imaT = 4; nevasca = false; nevT = 0;
+  banner = { txt: 'FASE 2: MINAS DE CRISTAL', sub: 'AGORA O ÍMÃ 🧲 PODE APARECER!', t: 3 };
+}
+
+/* ---------- obstáculos de gelo/rocha (e minas de ouro ou cristal) ---------- */
 function criarObstaculo() {
   const r = Math.random(), lado = Math.random() < .5 ? -1 : 1;
   let o;
   if (r < .2) o = { tp: 'lateral', lado, w: rnd(110, 170), h: 34 };          // espinhos saindo da parede
-  else if (r < .36) o = { tp: 'bloco', w: rnd(58, 84), h: rnd(48, 62) };      // bloco de gelo
-  else if (r < .5) o = { tp: 'mina', w: rnd(60, 86), h: rnd(50, 64) };        // mina de ouro (bloco com veio dourado)
-  else o = { tp: 'espinho', w: rnd(56, 96), h: rnd(48, 66) };                  // espinhos de gelo
+  else if (r < .36) o = { tp: 'bloco', w: rnd(58, 84), h: rnd(48, 62) };      // bloco de gelo/rocha
+  else if (r < .5) o = { tp: 'mina', w: rnd(60, 86), h: rnd(50, 64) };        // mina (veio de ouro ou de cristal)
+  else o = { tp: 'espinho', w: rnd(56, 96), h: rnd(48, 66) };                  // espinhos
   o.x = o.lado ? (o.lado < 0 ? 34 + o.w / 2 : W - 34 - o.w / 2) : rnd(50 + o.w / 2, W - 50 - o.w / 2);
   o.y = H + 40; o.hp = (o.tp === 'bloco' || o.tp === 'mina') ? .7 : .4; o.max = o.hp; o.sd = Math.random();
   obst.push(o);
@@ -189,56 +204,57 @@ function criarObstaculo() {
 function desenharObstaculo(o) {
   c.save(); c.translate(o.x, o.y); c.lineJoin = 'round';
   const derrete = 1 - o.hp / o.max;            // fica vermelhinho quando o fogo pega
+  const T = TEMA[fase];
   if (o.tp === 'espinho') {
-    // 3 espinhos de gelo apontando pra cima
+    // 3 espinhos apontando pra cima
     const bw = o.w / 3;
     for (let i = 0; i < 3; i++) {
       const bx = -o.w / 2 + i * bw, alt = o.h * (i === 1 ? 1 : .6 + o.sd * .3);
       const g = c.createLinearGradient(0, o.h / 2 - alt, 0, o.h / 2);
-      g.addColorStop(0, '#ffffff'); g.addColorStop(.5, '#bff0ff'); g.addColorStop(1, '#4fb0e0');
+      g.addColorStop(0, T.bloco1); g.addColorStop(.5, T.bloco2); g.addColorStop(1, T.bloco3);
       c.fillStyle = g; c.strokeStyle = '#1d5f8a'; c.lineWidth = 2;
       c.beginPath(); c.moveTo(bx, o.h / 2); c.lineTo(bx + bw / 2, o.h / 2 - alt); c.lineTo(bx + bw, o.h / 2); c.closePath(); c.fill(); c.stroke();
       // brilho em cada espinho
       c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 1.5;
       c.beginPath(); c.moveTo(bx + bw * .4, o.h / 2 - 4); c.lineTo(bx + bw / 2, o.h / 2 - alt + 6); c.stroke();
     }
-    // montinho de neve na base
+    // montinho de neve/pó na base
     c.fillStyle = '#f2fbff';
     c.beginPath(); c.ellipse(0, o.h / 2, o.w / 2 + 4, 8, 0, Math.PI, 0); c.fill();
   } else if (o.tp === 'lateral') {
     const b = o.lado * o.w / 2, d = -o.lado;   // b = ponto na parede, d = direção pro meio
     for (const [dy, len] of [[-11, .55], [0, 1], [11, .75]]) {
       const g = c.createLinearGradient(b, 0, b + d * o.w * len, 0);
-      g.addColorStop(0, '#7fcdf0'); g.addColorStop(1, '#ffffff');
+      g.addColorStop(0, T.parede2); g.addColorStop(1, T.bloco1);
       c.fillStyle = g; c.strokeStyle = '#1d5f8a'; c.lineWidth = 2;
       c.beginPath(); c.moveTo(b, dy - 9); c.lineTo(b + d * o.w * len, dy); c.lineTo(b, dy + 9); c.closePath(); c.fill(); c.stroke();
     }
   } else if (o.tp === 'bloco') {
-    // bloco de gelo transparente com rachaduras
+    // bloco transparente com rachaduras
     const g = c.createLinearGradient(-o.w / 2, -o.h / 2, o.w / 2, o.h / 2);
-    g.addColorStop(0, 'rgba(230,250,255,.95)'); g.addColorStop(1, 'rgba(90,180,230,.85)');
+    g.addColorStop(0, 'rgba(230,250,255,.95)'); g.addColorStop(1, `${T.bloco3}dd`);
     c.fillStyle = g; c.strokeStyle = '#1d5f8a'; c.lineWidth = 2.4;
     c.beginPath(); c.roundRect(-o.w / 2, -o.h / 2, o.w, o.h, 6); c.fill(); c.stroke();
     c.strokeStyle = 'rgba(255,255,255,.9)'; c.lineWidth = 3;
     c.beginPath(); c.moveTo(-o.w / 2 + 8, -o.h / 2 + 8); c.lineTo(-o.w / 2 + 22, -o.h / 2 + 8); c.stroke();
     c.strokeStyle = 'rgba(30,90,140,.6)'; c.lineWidth = 1.5;
     c.beginPath(); c.moveTo(-o.w * .1, -o.h / 2); c.lineTo(0, -o.h * .1); c.lineTo(-o.w * .15, o.h * .15); c.lineTo(o.w * .05, o.h / 2); c.stroke();
-    c.fillStyle = '#f2fbff'; c.fillRect(-o.w / 2, -o.h / 2 - 3, o.w, 6);   // neve em cima
+    c.fillStyle = '#f2fbff'; c.fillRect(-o.w / 2, -o.h / 2 - 3, o.w, 6);   // neve/pó em cima
   } else if (o.tp === 'mina') {
-    // bloco de gelo com um veio de ouro brilhando dentro — derrete e solta pepitas
+    // bloco com um veio brilhando dentro — fase 1 = ouro, fase 2 = cristal — e solta prêmios ao quebrar
     const g = c.createLinearGradient(-o.w / 2, -o.h / 2, o.w / 2, o.h / 2);
-    g.addColorStop(0, 'rgba(220,235,250,.95)'); g.addColorStop(1, 'rgba(80,150,200,.9)');
+    g.addColorStop(0, 'rgba(220,235,250,.95)'); g.addColorStop(1, `${T.parede1}e6`);
     c.fillStyle = g; c.strokeStyle = '#1d5f8a'; c.lineWidth = 2.4;
     c.beginPath(); c.roundRect(-o.w / 2, -o.h / 2, o.w, o.h, 6); c.fill(); c.stroke();
-    // veio dourado ondulado, mais forte quanto mais perto de derreter
+    // veio ondulado, mais forte quanto mais perto de quebrar
     c.save(); c.beginPath(); c.roundRect(-o.w / 2 + 3, -o.h / 2 + 3, o.w - 6, o.h - 6, 5); c.clip();
-    c.strokeStyle = `rgba(255,210,58,${.55 + derrete * .4})`; c.lineWidth = 6;
+    c.strokeStyle = `rgba(${T.veio},${.55 + derrete * .4})`; c.lineWidth = 6;
     c.beginPath(); c.moveTo(-o.w / 2, -o.h * .1);
     c.quadraticCurveTo(0, o.h * .25, o.w / 2, -o.h * .2); c.stroke();
-    c.fillStyle = `rgba(255,232,150,${.5 + derrete * .4})`;
+    c.fillStyle = `rgba(${T.veioClara},${.5 + derrete * .4})`;
     for (const px of [-.25, .1, .35]) { c.beginPath(); c.arc(px * o.w, Math.sin(px * 6) * o.h * .15, 4, 0, 7); c.fill(); }
     c.restore();
-    c.fillStyle = '#f2fbff'; c.fillRect(-o.w / 2, -o.h / 2 - 3, o.w, 6);   // neve em cima
+    c.fillStyle = '#f2fbff'; c.fillRect(-o.w / 2, -o.h / 2 - 3, o.w, 6);   // neve/pó em cima
   }
   if (derrete > 0) { c.globalCompositeOperation = 'source-atop'; c.fillStyle = `rgba(255,120,40,${derrete * .6})`; c.fillRect(-o.w, -o.h, o.w * 2, o.h * 2); }
   c.restore();
@@ -250,10 +266,16 @@ function burst(x, y, cor, n, v) {
 }
 const CORES_FOGO = ['#fff3a0', '#ffd23a', '#ffb02a', '#ff6a1a', '#ff3a10'];
 
-/* ---------- soltar pepitas de ouro quando uma mina derrete ---------- */
+/* ---------- soltar pepitas de ouro quando uma mina derrete (fase 1) ---------- */
 function soltarOuro(x, y) {
   const n = Math.floor(rnd(1, 4));
   for (let i = 0; i < n; i++) ouros.push({ x: clamp(x + rnd(-24, 24), 40, W - 40), y: y + rnd(-10, 10), vy: rnd(-60, -20) });
+}
+
+/* ---------- soltar cristais extras quando uma mina quebra (fase 2) ---------- */
+function soltarCristalMina(x, y) {
+  const n = Math.floor(rnd(2, 5));
+  for (let i = 0; i < n; i++) gems.push({ x: clamp(x + rnd(-24, 24), 40, W - 40), y: y + rnd(-10, 10) });
 }
 
 /* ---------- neve caindo (fica forte na nevasca) ---------- */
@@ -340,7 +362,10 @@ function update(dt) {
         if (o.hp <= 0) {
           o.morto = true; derretidos++;
           burst(o.x, o.y, '#ff8a2a', 14, 170); burst(o.x, o.y, '#bfe9ff', 16, 140);
-          if (o.tp === 'mina') { soltarOuro(o.x, o.y); burst(o.x, o.y, '#ffd23a', 12, 150); }
+          if (o.tp === 'mina') {
+            if (fase === 1) { soltarOuro(o.x, o.y); burst(o.x, o.y, '#ffd23a', 12, 150); }
+            else { soltarCristalMina(o.x, o.y); burst(o.x, o.y, '#7af6ff', 12, 150); }
+          }
         }
       }
     }
@@ -379,9 +404,9 @@ function update(dt) {
     return g.y > -30;
   });
 
-  // ---- ímã (power-up): só existem 8 na fase inteira ----
+  // ---- ímã (power-up): só aparece na fase 2, e só existem 8 na fase inteira ----
   imaT -= dt;
-  if (imaT <= 0 && imasSpawned < IMA_MAX) { imas.push({ x: rnd(60, W - 60), y: H + 30 }); imasSpawned++; imaT = rnd(7, 11); }
+  if (fase === 2 && imaT <= 0 && imasSpawned < IMA_MAX) { imas.push({ x: rnd(60, W - 60), y: H + 30 }); imasSpawned++; imaT = rnd(7, 11); }
   for (const g of imas) g.y -= VEL * dt;
   imas = imas.filter(g => {
     if (Math.abs(g.x - jog.x) < 30 && Math.abs(g.y - (PY + 4)) < 46) {
@@ -408,8 +433,11 @@ function update(dt) {
   for (const p of fx) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .96; p.vy *= .96; p.life -= dt; }
   fx = fx.filter(p => p.life > 0);
 
-  // ---- fim de jogo ----
-  if (dist >= META) { estado = 'vitoria'; nevasca = false; }
+  // ---- fim de fase / fim de jogo ----
+  if (dist >= META) {
+    if (fase === 1) avancarFase();
+    else { estado = 'vitoria'; nevasca = false; }
+  }
 }
 
 function levarDano(o) {
@@ -418,23 +446,24 @@ function levarDano(o) {
   if (vidas <= 0) { estado = 'gameover'; nevasca = false; }
 }
 
-/* ---------- cenário: caverna de gelo ---------- */
+/* ---------- cenário: caverna de gelo (fase 1) ou minas de cristal (fase 2) ---------- */
 function fundo() {
-  // céu da caverna: azul gelado
+  const T = TEMA[fase];
+  // céu da caverna
   const g = c.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#0f3456'); g.addColorStop(.6, '#0a2340'); g.addColorStop(1, '#06142a');
+  g.addColorStop(0, T.ceu1); g.addColorStop(.6, T.ceu2); g.addColorStop(1, T.ceu3);
   c.fillStyle = g; c.fillRect(0, 0, W, H);
 
-  // aurora boreal lá no fundo
+  // brilho mágico lá no fundo (aurora de gelo ou névoa de cristal)
   for (let k = 0; k < 3; k++) {
-    c.strokeStyle = ['rgba(120,255,200,.10)', 'rgba(120,200,255,.09)', 'rgba(190,140,255,.07)'][k];
+    c.strokeStyle = [T.brilho, 'rgba(120,200,255,.09)', 'rgba(190,140,255,.07)'][k];
     c.lineWidth = 40 - k * 8;
     c.beginPath();
     for (let x = -20; x <= W + 20; x += 20) c.lineTo(x, 120 + k * 50 + Math.sin(x * .015 + t * .6 + k) * 30);
     c.stroke();
   }
 
-  // colunas de gelo distantes (andam mais devagar = profundidade)
+  // colunas distantes (andam mais devagar = profundidade)
   const p1 = (dist * .35) % 260;
   for (let k = -1; k < 4; k++) {
     for (const [cx, w] of [[110, 46], [300, 60]]) {
@@ -454,10 +483,10 @@ function fundo() {
   }
   c.globalAlpha = 1;
 
-  // paredes de gelo irregulares dos dois lados
+  // paredes irregulares dos dois lados (gelo ou rocha de cristal)
   for (const sd of [-1, 1]) {
     const gw = c.createLinearGradient(sd < 0 ? 0 : W, 0, sd < 0 ? 50 : W - 50, 0);
-    gw.addColorStop(0, '#2a6d9c'); gw.addColorStop(.7, '#7cc6ea'); gw.addColorStop(1, '#e6f8ff');
+    gw.addColorStop(0, T.parede1); gw.addColorStop(.7, T.parede2); gw.addColorStop(1, T.parede3);
     c.fillStyle = gw;
     c.beginPath(); c.moveTo(sd < 0 ? 0 : W, -20);
     for (let sy = -20; sy <= H + 20; sy += 16) { const b = borda(sy + dist); c.lineTo(sd < 0 ? b : W - b, sy); }
@@ -469,14 +498,14 @@ function fundo() {
     c.stroke();
   }
 
-  // pingentes de gelo pendurados nas paredes
+  // pingentes de gelo (ou pontas de cristal) pendurados nas paredes
   const passo = 90, ini = Math.floor(dist / passo) - 1;
   for (let k = ini; k < ini + H / passo + 3; k++) {
     const wy = k * passo, sy = wy - dist;
     for (const sd of [-1, 1]) {
       if ((k + (sd > 0 ? 1 : 0)) % 2) continue;
       const b = borda(wy), x = sd < 0 ? b : W - b, len = 14 + (k * 7 % 10);
-      c.fillStyle = '#e6f8ff'; c.strokeStyle = 'rgba(40,110,160,.6)'; c.lineWidth = 1.2;
+      c.fillStyle = T.parede3; c.strokeStyle = 'rgba(40,40,80,.6)'; c.lineWidth = 1.2;
       c.beginPath(); c.moveTo(x, sy - 6); c.lineTo(x - sd * len, sy); c.lineTo(x, sy + 6); c.closePath(); c.fill(); c.stroke();
     }
   }
@@ -582,8 +611,9 @@ function hud() {
   }
   texto('💎 ' + cristais, W - 14, 22, 11, '#7af6ff', 'right');
   texto('🥇 ' + ouro, W - 14, 42, 11, '#ffd23a', 'right');
-  texto('🔥 ' + derretidos, W / 2, 22, 10, '#ffb02a');
-  texto('🧲 ' + imaColetados + '/' + IMA_MAX, W / 2, 42, 10, '#9ad8ff');
+  texto('FASE ' + fase, W / 2, 22, 10, '#ffe9a8');
+  if (fase === 2) texto('🧲 ' + imaColetados + '/' + IMA_MAX, W / 2, 42, 10, '#9ad8ff');
+  else texto('🔥 ' + derretidos, W / 2, 42, 10, '#ffb02a');
   // barra de progresso
   const pr = clamp(dist / META, 0, 1);
   c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(W - 14, 60, 6, 124);
@@ -603,11 +633,11 @@ function telas() {
   if (estado === 'inicio') {
     c.fillStyle = 'rgba(4,14,30,.65)'; c.fillRect(0, 0, W, H);
     texto('FAGULHA', W / 2, 110, 30, '#ffe9a8');
-    texto('CAVERNA DE GELO', W / 2, 156, 12, '#9ff0ff');
+    texto('MINAS DE GELO E CRISTAL', W / 2, 156, 10, '#9ff0ff');
     drawFagulha(c, W / 2, 300, .85, agora, { pose: 'stand', glow: '#ff8a2a' });
     texto(toque ? '◀ ▶ MOVER   🔥 FOGO' : '← → MOVER   ESPAÇO = FOGO', W / 2, 448, 9, '#fff');
-    texto('DERRETA MINAS DE OURO E GELO!', W / 2, 472, 8, '#ffb02a');
-    texto('15 💎 = 1 ❤️   •   8 🧲 NA FASE', W / 2, 496, 8, '#9ad8ff');
+    texto('FASE 1: CAVERNA DE GELO E OURO', W / 2, 472, 8, '#ffb02a');
+    texto('FASE 2: MINAS DE CRISTAL + 🧲 ÍMÃ', W / 2, 496, 8, '#9ad8ff');
     if (pisca) texto(toque ? 'TOQUE PARA JOGAR' : 'APERTE ESPAÇO', W / 2, 545, 14, '#fff');
   } else if (estado === 'gameover') {
     c.fillStyle = 'rgba(30,0,10,.75)'; c.fillRect(0, 0, W, H);
@@ -617,7 +647,7 @@ function telas() {
     if (pisca) texto(toque ? 'TOQUE: JOGAR DE NOVO' : 'ESPAÇO: JOGAR DE NOVO', W / 2, 400, 11, '#fff');
   } else if (estado === 'vitoria') {
     c.fillStyle = 'rgba(0,20,40,.75)'; c.fillRect(0, 0, W, H);
-    texto('SAIU DA CAVERNA!', W / 2, 150, 18, '#9ff0ff');
+    texto('SAIU DAS MINAS!', W / 2, 150, 18, '#9ff0ff');
     drawFagulha(c, W / 2, 290, .9, agora, { pose: 'cheer', glow: '#ff8a2a' });
     texto('💎 ' + cristais + '   🥇 ' + ouro + '   🔥 ' + derretidos, W / 2, 460, 12, '#ffe9a8');
     if (pisca) texto(toque ? 'TOQUE: JOGAR DE NOVO' : 'ESPAÇO: JOGAR DE NOVO', W / 2, 540, 11, '#fff');
