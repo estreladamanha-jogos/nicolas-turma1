@@ -163,6 +163,7 @@ const IMA_MAX = 8;              // só existem 8 ímãs na fase inteira
 const IMA_DURACAO = 20;         // o poder do ímã dura 20 segundos quando ativado
 const ESTRELAS_TOTAL = 12;      // fase 3: junte as 12 pra ganhar a vitória perfeita
 const BOSS_CRISTAIS = 15;       // fase 4: cristais com ímã pra deixar o chefão vulnerável
+const BOSS_Y = 270;              // altura do chefão na tela (mais pra baixo)
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
 const toque = matchMedia('(hover: none) and (pointer: coarse)').matches;   // é celular?
@@ -192,7 +193,7 @@ let apelido = '';               // apelido de 3 letras escolhido na placa
 let t = 0, dist = 0;
 let vidas = 3, invenc = 0, cristais = 0, cristaisVida = 0, ouro = 0, derretidos = 0, shake = 0;
 let imasSpawned = 0, imaColetados = 0, imaCarga = 0, imaAtivo = 0;
-let estrelas = [], estrelasSpawned = 0, estrelasColetadas = 0, estrelaT = 0;
+let estrelas = [], estrelasColetadas = 0, estrelaT = 0;
 let cristaisBoss = 0, bossAtivo = false, bossMorto = false, bossHp = 1, bossVulneravel = false, bossX = W / 2, bossBob = 0;
 let nevasca = false, nevT = 0, terremoto = false, termT = 0, chuva = false, chuvaT = 0, banner = null, fogo = false;
 const jog = { x: W / 2, vx: 0 };
@@ -204,7 +205,7 @@ function resetar() {
   estado = 'jogando'; fase = 1; poder = 'fogo'; levouDano = false; pausado = false; tempoJogo = 0;
   t = 0; dist = 0; vidas = 3; invenc = 0; cristais = 0; cristaisVida = 0; ouro = 0; derretidos = 0; shake = 0;
   imasSpawned = 0; imaColetados = 0; imaCarga = 0; imaAtivo = 0;
-  estrelas = []; estrelasSpawned = 0; estrelasColetadas = 0; estrelaT = 0;
+  estrelas = []; estrelasColetadas = 0; estrelaT = 0;
   cristaisBoss = 0; bossAtivo = false; bossMorto = false; bossHp = 1; bossVulneravel = false;
   nevasca = false; nevT = 0; terremoto = false; termT = 0; chuva = false; chuvaT = 0; fogo = false;
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; ouros = []; imas = []; fx = [];
@@ -222,7 +223,7 @@ function avancarFase() {
 
 function avancarFase3() {
   fase = 3; dist = 0; obst = []; gems = []; ouros = []; imas = []; fx = []; estrelas = [];
-  estrelasSpawned = 0; estrelasColetadas = 0; estrelaT = 1.5;
+  estrelasColetadas = 0; estrelaT = 1.5;
   spawnT = 1.2; gemT = 1; ouroT = 3; imaT = 5; terremoto = false; termT = 0; chuva = false; chuvaT = 0;
   banner = { txt: 'FASE 3: CAVERNA NO ESPAÇO', sub: 'JUNTE AS 12 ⭐ PRA VITÓRIA PERFEITA!', t: 3.5 };
 }
@@ -578,10 +579,10 @@ function update(dt) {
     return g.y > -30;
   });
 
-  // ---- estrelas da fase 3: só existem 12 na fase inteira ----
+  // ---- estrelas da fase 3: uma de cada vez; se passar direto, aparece outra depois, até juntar as 12 ----
   if (fase === 3) {
     estrelaT -= dt;
-    if (estrelaT <= 0 && estrelasSpawned < ESTRELAS_TOTAL) { estrelas.push({ x: rnd(60, W - 60), y: H + 30 }); estrelasSpawned++; estrelaT = rnd(3, 5); }
+    if (estrelaT <= 0 && estrelas.length === 0 && estrelasColetadas < ESTRELAS_TOTAL) { estrelas.push({ x: rnd(60, W - 60), y: H + 30 }); estrelaT = rnd(3, 5); }
     for (const g of estrelas) g.y -= VEL * dt;
     estrelas = estrelas.filter(g => {
       if (Math.abs(g.x - jog.x) < 28 && Math.abs(g.y - (PY + 4)) < 44) {
@@ -598,15 +599,16 @@ function update(dt) {
   // ---- chefão da fase 4: pegue 15 cristais com o ímã e depois jogue fogo nele ----
   if (fase === 4 && bossAtivo && !bossMorto) {
     bossBob += dt;
-    bossX = clamp(W / 2 + Math.sin(t * .7) * 80, borda(dist + 220) + 50, W - borda(dist + 220) - 50);
-    if (Math.random() < dt * .4) burst(bossX + rnd(-40, 40), 220, '#bfe9ff', 1, 60);
+    bossX = clamp(W / 2 + Math.sin(t * .7) * 80, borda(dist + BOSS_Y) + 50, W - borda(dist + BOSS_Y) - 50);
+    if (Math.random() < dt * .6) burst(bossX + rnd(-40, 40), BOSS_Y, '#bfe9ff', 1, 60);
+    if (Math.random() < dt * 1.2) burst(bossX + rnd(-50, 50), BOSS_Y + 70, '#d8f8ff', 1, 30);   // gotas pingando
     if (!bossVulneravel && Math.abs(jog.x - bossX) < 50 && invenc <= 0 && Math.random() < dt * .3) levarDano(null);
     if (bossVulneravel && fogo && jog.x + 26 > bossX - 40 && jog.x - 26 < bossX + 40) {
-      bossHp -= dt * .3; burst(bossX, 220, '#7afcff', 4, 80);
+      bossHp -= dt * .3; burst(bossX, BOSS_Y, '#7afcff', 4, 80);
       if (bossHp <= 0) {
         bossHp = 0; bossMorto = true;
         banner = { txt: 'CHEFÃO DERROTADO!', sub: 'CONTINUE DESCENDO!', t: 3 };
-        burst(bossX, 220, '#ffffff', 30, 200);
+        burst(bossX, BOSS_Y, '#ffffff', 30, 200);
       }
     }
   }
@@ -670,13 +672,25 @@ function fundo() {
   g.addColorStop(0, T.ceu1); g.addColorStop(.6, T.ceu2); g.addColorStop(1, T.ceu3);
   c.fillStyle = g; c.fillRect(0, 0, W, H);
 
-  // brilho mágico lá no fundo (aurora de gelo ou névoa de cristal)
+  // brilho mágico lá no fundo (aurora de gelo, névoa de cristal ou caustica de água)
   for (let k = 0; k < 3; k++) {
     c.strokeStyle = [T.brilho, 'rgba(120,200,255,.09)', 'rgba(190,140,255,.07)'][k];
     c.lineWidth = 40 - k * 8;
     c.beginPath();
     for (let x = -20; x <= W + 20; x += 20) c.lineTo(x, 120 + k * 50 + Math.sin(x * .015 + t * .6 + k) * 30);
     c.stroke();
+  }
+
+  // fase 4: faixas de luz cáustica ondulando, como se estivesse debaixo d'água
+  if (fase === 4) {
+    c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = .13;
+    for (let i = 0; i < 4; i++) {
+      c.strokeStyle = '#bdf3ff'; c.lineWidth = 16;
+      c.beginPath();
+      for (let x = -20; x <= W + 20; x += 20) c.lineTo(x, ((i * 170 + t * 46) % (H + 100)) - 50 + Math.sin(x * .02 + t * 2 + i) * 14);
+      c.stroke();
+    }
+    c.restore();
   }
 
   // colunas distantes (andam mais devagar = profundidade): gelo na fase 1, cristais facetados na fase 2
@@ -793,10 +807,10 @@ function desenharIma(g) {
   c.restore();
 }
 
-/* ---------- estrelinha colecionável da fase 3 ---------- */
+/* ---------- estrelinha colecionável da fase 3 (fica parada, sem girar) ---------- */
 function desenharEstrela(g) {
-  c.save(); c.translate(g.x, g.y); c.rotate(t * 1.4 + g.x);
-  c.shadowColor = '#fff3a0'; c.shadowBlur = 10;
+  c.save(); c.translate(g.x, g.y);
+  c.shadowColor = '#fff3a0'; c.shadowBlur = 10 + Math.sin(t * 3) * 3;
   c.fillStyle = '#ffe866'; c.strokeStyle = '#c98a0e'; c.lineWidth = 1.2;
   c.beginPath();
   for (let i = 0; i < 5; i++) {
@@ -812,25 +826,53 @@ function desenharEstrela(g) {
 /* ---------- o chefão: monstro de água da fase 4 ---------- */
 function desenharChefao() {
   if (!bossAtivo || bossMorto) return;
-  const y = 220 + Math.sin(bossBob * 2) * 10;
+  const y = BOSS_Y + Math.sin(bossBob * 2) * 8;
   c.save(); c.translate(bossX, y);
-  const g = c.createRadialGradient(-20, -20, 10, 0, 0, 90);
-  g.addColorStop(0, bossVulneravel ? '#ff9a9a' : '#6fd8ff');
-  g.addColorStop(1, bossVulneravel ? '#9a2a2a' : '#17587a');
-  c.fillStyle = g; c.strokeStyle = '#0a2a3a'; c.lineWidth = 2;
+
+  // tentáculos de água balançando atrás do corpo
+  for (const lado of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const baseX = lado * (36 + i * 16), sway = Math.sin(bossBob * 2.4 + i + lado) * 16;
+      c.strokeStyle = bossVulneravel ? 'rgba(255,150,150,.65)' : 'rgba(120,225,245,.65)';
+      c.lineWidth = 11 - i * 2.5; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(baseX * .4, 46);
+      c.quadraticCurveTo(baseX + sway, 92 + i * 14, baseX * .6 + sway * 1.4, 134 + i * 16);
+      c.stroke();
+    }
+  }
+
+  // corpo gelatinoso translúcido, tipo uma gota/água viva
+  const g = c.createRadialGradient(-20, -34, 10, 0, -6, 96);
+  g.addColorStop(0, bossVulneravel ? '#ffd0d0' : '#dffaff');
+  g.addColorStop(.55, bossVulneravel ? '#ff8a8a' : '#4fc3e0');
+  g.addColorStop(1, bossVulneravel ? '#9a2a2a' : '#0d4a5e');
+  c.globalAlpha = .92;
+  c.fillStyle = g; c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 2;
   c.beginPath();
-  for (let i = 0; i < 12; i++) {
-    const a = i / 12 * Math.PI * 2, r = 76 + Math.sin(bossBob * 3 + i) * 9;
-    const px = Math.cos(a) * r, py = Math.sin(a) * r * .78;
+  for (let i = 0; i < 14; i++) {
+    const a = i / 14 * Math.PI * 2, r = 78 + Math.sin(bossBob * 3 + i * 1.3) * 10;
+    const px = Math.cos(a) * r, py = Math.sin(a) * r * .8 - 8;
     if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
   }
   c.closePath(); c.fill(); c.stroke();
+  c.globalAlpha = 1;
+
+  // brilho de onda na "cabeça"
+  c.fillStyle = 'rgba(255,255,255,.3)';
+  c.beginPath(); c.ellipse(-18, -48, 30, 14, -.3, 0, 7); c.fill();
+
+  // olhos grandes e aquosos
   c.fillStyle = '#fff';
-  c.beginPath(); c.ellipse(-24, -8, 13, 17, 0, 0, 7); c.ellipse(24, -8, 13, 17, 0, 0, 7); c.fill();
-  c.fillStyle = '#0a1830';
-  c.beginPath(); c.arc(-24, -4, 6, 0, 7); c.arc(24, -4, 6, 0, 7); c.fill();
-  c.strokeStyle = '#0a1830'; c.lineWidth = 4;
-  c.beginPath(); c.arc(0, 38, 28, .15 * Math.PI, .85 * Math.PI); c.stroke();
+  c.beginPath(); c.ellipse(-26, -18, 15, 19, 0, 0, 7); c.ellipse(26, -18, 15, 19, 0, 0, 7); c.fill();
+  c.fillStyle = bossVulneravel ? '#7a1010' : '#0a3a50';
+  c.beginPath(); c.arc(-26 + Math.sin(bossBob) * 3, -14, 7, 0, 7); c.arc(26 + Math.sin(bossBob) * 3, -14, 7, 0, 7); c.fill();
+  c.fillStyle = '#fff';
+  c.beginPath(); c.arc(-23, -17, 2, 0, 7); c.arc(29, -17, 2, 0, 7); c.fill();
+
+  // boca grande, borbulhante
+  c.strokeStyle = '#0a3a50'; c.lineWidth = 4;
+  c.beginPath(); c.arc(0, 36, 26, .1 * Math.PI, .9 * Math.PI); c.stroke();
+
   c.restore();
   // barra de vida do chefão
   const pr = clamp(bossHp, 0, 1);
@@ -879,6 +921,7 @@ function desenhar() {
   if (nevasca) { c.fillStyle = 'rgba(225,242,255,.2)'; c.fillRect(0, 0, W, H); }
   if (terremoto) { c.fillStyle = 'rgba(150,100,180,.15)'; c.fillRect(0, 0, W, H); }
   if (chuva) { c.fillStyle = 'rgba(255,255,255,.1)'; c.fillRect(0, 0, W, H); }
+  if (fase === 4) { c.fillStyle = `rgba(79,195,224,${.1 + Math.sin(t * 2) * .03})`; c.fillRect(0, 0, W, H); }
   // geada nos cantos da tela
   const v = c.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .75);
   v.addColorStop(0, 'rgba(200,240,255,0)'); v.addColorStop(1, 'rgba(200,240,255,.35)');
