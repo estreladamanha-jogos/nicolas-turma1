@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Fagulha — Minas de Gelo e Cristal</title>
+<title>Fagulha — Gelo, Cristal e Estrelas</title>
 <!-- fonte de videogame -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,12 +32,13 @@
 </style>
 </head>
 <body>
-<header><h1>FAGULHA: MINAS DE GELO E CRISTAL</h1></header>
+<header><h1>FAGULHA: GELO, CRISTAL E ESTRELAS</h1></header>
 <main>
   <canvas id="game" width="420" height="640"></canvas>
 </main>
 <footer>
   <button id="btnEsq">◀</button>
+  <button id="btnTroca">🔁</button>
   <button id="btnFogo">🔥</button>
   <button id="btnDir">▶</button>
 </footer>
@@ -155,29 +156,34 @@ const toque = matchMedia('(hover: none) and (pointer: coarse)').matches;   // é
 // formato da parede de gelo (fica ondulada e irregular)
 const borda = y => 34 + 9 * Math.sin(y * .013) + 5 * Math.sin(y * .041 + 1) + 3 * Math.sin(y * .11);
 
-// paleta de cada fase: 1 = caverna de gelo (minas de ouro), 2 = minas de cristal
+// paleta de cada fase: 1 = caverna de gelo (minas de ouro), 2 = minas de cristal, 3 = espaço
 const TEMA = {
   1: { ceu1: '#0f3456', ceu2: '#0a2340', ceu3: '#06142a', parede1: '#2a6d9c', parede2: '#7cc6ea', parede3: '#e6f8ff',
        bloco1: '#ffffff', bloco2: '#bff0ff', bloco3: '#4fb0e0', veio: '255,210,58', veioClara: '255,232,150', brilho: 'rgba(120,255,200,.10)' },
   2: { ceu1: '#3a1550', ceu2: '#260e38', ceu3: '#13051e', parede1: '#6a2f8f', parede2: '#c27bf0', parede3: '#f6e6ff',
-       bloco1: '#ffffff', bloco2: '#e3c6ff', bloco3: '#a24fe0', veio: '122,246,255', veioClara: '200,250,255', brilho: 'rgba(230,140,255,.12)' }
+       bloco1: '#ffffff', bloco2: '#e3c6ff', bloco3: '#a24fe0', veio: '122,246,255', veioClara: '200,250,255', brilho: 'rgba(230,140,255,.12)' },
+  3: { ceu1: '#070520', ceu2: '#030212', ceu3: '#000000', parede1: '#2a2748', parede2: '#4d4878', parede3: '#a8a4d8',
+       bloco1: '#ffffff', bloco2: '#cfd4ff', bloco3: '#5a5aa0', veio: '255,255,255', veioClara: '255,255,255', brilho: 'rgba(200,200,255,.12)' }
 };
 
 let estado = 'inicio';          // inicio | jogando | gameover | vitoria
-let fase = 1;                   // 1 = caverna de gelo (ouro)   2 = minas de cristal (ímã)
+let fase = 1;                   // 1 = caverna de gelo (ouro)   2 = minas de cristal (ímã)   3 = espaço (meteoros)
+let poder = 'fogo';             // 'fogo' ou 'ima' — trocado com a tecla Q
+let levouDano = false;          // fica true se o Fagulha tomar qualquer dano na partida
 let t = 0, dist = 0;
 let vidas = 3, invenc = 0, cristais = 0, cristaisVida = 0, ouro = 0, derretidos = 0, shake = 0;
 let imasSpawned = 0, imaColetados = 0, imaCarga = 0, imaAtivo = 0;
-let nevasca = false, nevT = 0, terremoto = false, termT = 0, banner = null, fogo = false;
+let nevasca = false, nevT = 0, terremoto = false, termT = 0, chuva = false, chuvaT = 0, banner = null, fogo = false;
 const jog = { x: W / 2, vx: 0 };
 let obst = [], gems = [], ouros = [], imas = [], fx = [], neve = [];
 let spawnT = 1, gemT = 1, ouroT = 3, imaT = 6;
 const keys = { left: false, right: false, fogo: false };
 
 function resetar() {
-  estado = 'jogando'; fase = 1; t = 0; dist = 0; vidas = 3; invenc = 0; cristais = 0; cristaisVida = 0; ouro = 0; derretidos = 0; shake = 0;
+  estado = 'jogando'; fase = 1; poder = 'fogo'; levouDano = false;
+  t = 0; dist = 0; vidas = 3; invenc = 0; cristais = 0; cristaisVida = 0; ouro = 0; derretidos = 0; shake = 0;
   imasSpawned = 0; imaColetados = 0; imaCarga = 0; imaAtivo = 0;
-  nevasca = false; nevT = 0; terremoto = false; termT = 0; fogo = false;
+  nevasca = false; nevT = 0; terremoto = false; termT = 0; chuva = false; chuvaT = 0; fogo = false;
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; ouros = []; imas = []; fx = [];
   spawnT = 1.5; gemT = 1; ouroT = 3; imaT = 6;
   banner = { txt: 'FASE 1: CAVERNA DE GELO', sub: toque ? 'BOTÃO 🔥 = JATO DE FOGO' : 'ESPAÇO = JATO DE FOGO', t: 2.6 };
@@ -187,21 +193,37 @@ function resetar() {
 function avancarFase() {
   fase = 2; dist = 0; obst = []; gems = []; ouros = []; imas = []; fx = [];
   spawnT = 1.5; gemT = 1; ouroT = 3; imaT = 4; nevasca = false; nevT = 0; terremoto = false; termT = 0;
-  banner = { txt: 'FASE 2: SEM FOGO!', sub: 'ESPAÇO ATIVA O ÍMÃ 🧲 POR 20s', t: 3 };
-  atualizarBotaoFogo();
+  banner = { txt: 'FASE 2: MINAS DE CRISTAL', sub: 'TECLA Q TROCA FOGO 🔥 / ÍMÃ 🧲', t: 3 };
 }
 
-/* ---------- troca o ícone do botão de toque: 🔥 na fase 1, 🧲 na fase 2 ---------- */
+function avancarFase3() {
+  fase = 3; dist = 0; obst = []; gems = []; ouros = []; imas = []; fx = [];
+  spawnT = 1.2; gemT = 1; ouroT = 3; imaT = 5; terremoto = false; termT = 0; chuva = false; chuvaT = 0;
+  banner = { txt: 'FASE 3: CAVERNA NO ESPAÇO', sub: 'PEDRAS E METEOROS - DESVIE!', t: 3 };
+}
+
+function finalizarJogo() {
+  estado = 'vitoria'; nevasca = false; terremoto = false; chuva = false;
+}
+
+/* ---------- troca de poder: fogo e ímã (tecla Q ou botão 🔁) ---------- */
+function trocarPoder() {
+  poder = poder === 'fogo' ? 'ima' : 'fogo';
+  atualizarBotaoFogo();
+  banner = { txt: poder === 'fogo' ? '🔥 PODER: FOGO' : '🧲 PODER: ÍMÃ', sub: 'TECLA Q TROCA DE NOVO', t: 1.4 };
+}
+
+/* ---------- troca o ícone do botão de toque conforme o poder escolhido ---------- */
 function atualizarBotaoFogo() {
   const b = document.getElementById('btnFogo');
-  b.textContent = fase === 2 ? '🧲' : '🔥';
-  b.style.background = fase === 2 ? '#6a2f8f' : '#ff7a2a';
-  b.style.boxShadow = fase === 2 ? '0 4px 0 #3a1a52' : '0 4px 0 #9a3c08';
+  b.textContent = poder === 'ima' ? '🧲' : '🔥';
+  b.style.background = poder === 'ima' ? '#6a2f8f' : '#ff7a2a';
+  b.style.boxShadow = poder === 'ima' ? '0 4px 0 #3a1a52' : '0 4px 0 #9a3c08';
 }
 
-/* ---------- tenta ativar o poder do ímã (só na fase 2, se tiver carga guardada) ---------- */
+/* ---------- tenta ativar o poder do ímã (precisa ter carga guardada e o poder selecionado) ---------- */
 function tentarAtivarIma() {
-  if (fase === 2 && estado === 'jogando' && imaCarga > 0 && imaAtivo <= 0) {
+  if (poder === 'ima' && estado === 'jogando' && imaCarga > 0 && imaAtivo <= 0) {
     imaCarga--; imaAtivo = IMA_DURACAO; burst(jog.x, PY, '#9ad8ff', 14, 130);
     banner = { txt: '🧲 ÍMÃ ATIVADO!', sub: 'PUXA CRISTAIS POR 20s', t: 2 };
   }
@@ -209,6 +231,14 @@ function tentarAtivarIma() {
 
 /* ---------- obstáculos de gelo/rocha (e minas de ouro na fase 1) ---------- */
 function criarObstaculo() {
+  if (fase === 3) {
+    // fase 3: pedras/meteoros espalhados pelo mapa inteiro, não só nas paredes
+    const comRastro = Math.random() < .6, w = rnd(40, 76);
+    const o = { tp: 'meteoro', w, h: w, rastro: comRastro, vx: comRastro ? rnd(-40, 40) : 0, sd: Math.random() };
+    o.x = rnd(40 + w / 2, W - 40 - w / 2); o.y = H + 60; o.hp = .4; o.max = .4;
+    obst.push(o);
+    return;
+  }
   const r = Math.random(), lado = Math.random() < .5 ? -1 : 1;
   let o;
   if (fase === 2) {
@@ -281,6 +311,26 @@ function desenharObstaculo(o) {
     for (const px of [-.25, .1, .35]) { c.beginPath(); c.arc(px * o.w, Math.sin(px * 6) * o.h * .15, 4, 0, 7); c.fill(); }
     c.restore();
     c.fillStyle = '#f2fbff'; c.fillRect(-o.w / 2, -o.h / 2 - 3, o.w, 6);   // neve/pó em cima
+  } else if (o.tp === 'meteoro') {
+    // pedra/meteoro do espaço, com rastro de luz quando vem com velocidade lateral
+    if (o.rastro) {
+      c.save();
+      const ang = Math.atan2(-VEL, -(o.vx || .0001));
+      c.rotate(ang);
+      const trailLen = 60;
+      const tg = c.createLinearGradient(0, 0, trailLen, 0);
+      tg.addColorStop(0, 'rgba(255,255,255,.55)'); tg.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = tg;
+      c.beginPath(); c.moveTo(0, -5); c.lineTo(0, 5); c.lineTo(trailLen, 2); c.lineTo(trailLen, -2); c.closePath(); c.fill();
+      c.restore();
+    }
+    const rg = c.createRadialGradient(-o.w * .15, -o.h * .15, 2, 0, 0, o.w / 2);
+    rg.addColorStop(0, '#d8d8ec'); rg.addColorStop(1, '#4a4468');
+    c.fillStyle = rg; c.strokeStyle = '#1a1830'; c.lineWidth = 2;
+    c.beginPath(); c.arc(0, 0, o.w / 2, 0, 7); c.fill(); c.stroke();
+    c.fillStyle = 'rgba(0,0,0,.28)';
+    for (const [px, py, pr] of [[-o.w * .15, -o.h * .1, o.w * .12], [o.w * .18, o.h * .08, o.w * .09], [-o.w * .05, o.h * .2, o.w * .07]])
+      { c.beginPath(); c.arc(px, py, pr, 0, 7); c.fill(); }
   }
   if (derrete > 0) { c.globalCompositeOperation = 'source-atop'; c.fillStyle = `rgba(255,120,40,${derrete * .6})`; c.fillRect(-o.w, -o.h, o.w * 2, o.h * 2); }
   c.restore();
@@ -318,7 +368,11 @@ addEventListener('keydown', e => {
   if (estado !== 'jogando') { if (!e.repeat && (k === 'Space' || k === 'Enter' || k === 'KeyR')) resetar(); return; }
   if (k === 'ArrowLeft' || k === 'KeyA') keys.left = true;
   if (k === 'ArrowRight' || k === 'KeyD') keys.right = true;
-  if (k === 'Space') { keys.fogo = true; if (!e.repeat) tentarAtivarIma(); }
+  if (k === 'KeyQ' && !e.repeat) trocarPoder();
+  if (k === 'Space') {
+    if (poder === 'fogo') keys.fogo = true;
+    if (!e.repeat && poder === 'ima') tentarAtivarIma();
+  }
 });
 addEventListener('keyup', e => {
   if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
@@ -334,8 +388,13 @@ function botao(id, tecla) {
 }
 botao('btnEsq', 'left'); botao('btnDir', 'right');
 const btnFogo = document.getElementById('btnFogo');
-btnFogo.addEventListener('pointerdown', e => { e.preventDefault(); if (estado !== 'jogando') { resetar(); return; } keys.fogo = true; tentarAtivarIma(); });
+btnFogo.addEventListener('pointerdown', e => {
+  e.preventDefault(); if (estado !== 'jogando') { resetar(); return; }
+  if (poder === 'fogo') keys.fogo = true; else tentarAtivarIma();
+});
 for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btnFogo.addEventListener(ev, () => keys.fogo = false);
+const btnTroca = document.getElementById('btnTroca');
+btnTroca.addEventListener('pointerdown', e => { e.preventDefault(); if (estado !== 'jogando') { resetar(); return; } trocarPoder(); });
 cv.addEventListener('pointerdown', () => { if (estado !== 'jogando') resetar(); });
 
 /* ---------- atualização ---------- */
@@ -358,14 +417,14 @@ function update(dt) {
   if (shake > 0) shake -= dt;
   if (imaAtivo > 0) imaAtivo -= dt;
 
-  // ---- fase 1: nevasca a cada 16s (dura 7s)   •   fase 2: terremoto de espinhos de cristal a cada 30s (dura 6s) ----
+  // ---- fase 1: nevasca a cada 16s   •   fase 2: terremoto a cada 30s   •   fase 3: chuva de estrelas a cada 20s ----
   if (fase === 1) {
     nevT += dt;
     const ciclo = nevT % 16;
     const nv = ciclo > 9;
     if (nv && !nevasca) banner = { txt: 'NEVASCA!', sub: 'CUIDADO COM O VENTO', t: 2.4 };
     nevasca = nv;
-  } else {
+  } else if (fase === 2) {
     termT += dt;
     const ciclo = termT % 30;
     const tr = ciclo > 24;
@@ -381,10 +440,17 @@ function update(dt) {
         obst.push(o);
       }
     }
+  } else {
+    chuvaT += dt;
+    const ciclo = chuvaT % 20;
+    const ch = ciclo > 12;
+    if (ch && !chuva) banner = { txt: 'CHUVA DE ESTRELAS CADENTES!', sub: 'PEDRAS CAINDO DE TODO LADO!', t: 2.4 };
+    chuva = ch;
+    if (chuva) { shake = Math.max(shake, .1); if (Math.random() < dt * 4) burst(rnd(40, W - 40), rnd(60, 300), '#ffffff', 3, 90); }
   }
 
-  // ---- fogo infinito: é só segurar ESPAÇO (na fase 2 o poder de fogo é desligado) ----
-  fogo = fase === 2 ? false : keys.fogo;
+  // ---- fogo infinito: é só segurar ESPAÇO, se o poder escolhido (tecla Q) for o fogo ----
+  fogo = poder === 'fogo' ? keys.fogo : false;
 
   // ---- movimento do Fagulha ----
   const ax = (keys.left ? -1 : 0) + (keys.right ? 1 : 0);
@@ -395,9 +461,9 @@ function update(dt) {
 
   // ---- obstáculos ----
   spawnT -= dt;
-  const corre = nevasca || terremoto;
+  const corre = nevasca || terremoto || chuva;
   if (spawnT <= 0) { criarObstaculo(); spawnT = (corre ? .6 : .95) * rnd(.8, 1.2); }
-  for (const o of obst) o.y -= VEL * dt;
+  for (const o of obst) { o.y -= VEL * dt; if (o.vx) o.x += o.vx * dt; }
 
   // ---- jato de fogo derrete o gelo (e as minas de ouro) embaixo do Fagulha ----
   if (fogo) {
@@ -484,14 +550,15 @@ function update(dt) {
   // ---- fim de fase / fim de jogo ----
   if (dist >= META) {
     if (fase === 1) avancarFase();
-    else { estado = 'vitoria'; nevasca = false; }
+    else if (fase === 2) avancarFase3();
+    else finalizarJogo();
   }
 }
 
 function levarDano(o) {
-  vidas--; invenc = 1.5; shake = .3; burst(jog.x, PY, '#ff5577', 16, 180);
+  vidas--; invenc = 1.5; shake = .3; levouDano = true; burst(jog.x, PY, '#ff5577', 16, 180);
   if (o) o.morto = true;
-  if (vidas <= 0) { estado = 'gameover'; nevasca = false; }
+  if (vidas <= 0) { estado = 'gameover'; nevasca = false; terremoto = false; chuva = false; }
 }
 
 /* ---------- cenário: caverna de gelo (fase 1) ou minas de cristal (fase 2) ---------- */
@@ -528,6 +595,11 @@ function fundo() {
           c.strokeStyle = 'rgba(255,255,255,.2)'; c.lineWidth = 1;
           c.beginPath(); c.moveTo(cx + dx, y); c.lineTo(cx + dx - dw * .1, y + dh * .6); c.stroke();
         }
+      } else if (fase === 3) {
+        // asteroides flutuando no fundo do espaço
+        const rg = c.createRadialGradient(cx - 10, y + 80, 4, cx, y + 90, w);
+        rg.addColorStop(0, 'rgba(180,180,210,.2)'); rg.addColorStop(1, 'rgba(30,30,55,.03)');
+        c.fillStyle = rg; c.beginPath(); c.arc(cx, y + 90, w * .8, 0, 7); c.fill();
       } else {
         const gc = c.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0);
         gc.addColorStop(0, 'rgba(150,215,255,.05)'); gc.addColorStop(.5, 'rgba(200,240,255,.14)'); gc.addColorStop(1, 'rgba(150,215,255,.05)');
@@ -537,11 +609,12 @@ function fundo() {
     }
   }
 
-  // cristais pequenos brilhando no fundo (mais deles e mais roxos na fase 2)
-  const qtdBrilho = fase === 2 ? 22 : 14;
+  // cristais/estrelas pequenas brilhando no fundo (mais deles na fase 2 e 3)
+  const qtdBrilho = fase === 2 ? 22 : fase === 3 ? 30 : 14;
+  const corBrilho = fase === 2 ? '#e8c6ff' : fase === 3 ? '#ffffff' : '#e8fbff';
   for (let k = 0; k < qtdBrilho; k++) {
     const sx = (k * 97) % (W - 100) + 50, sy = ((k * 173 - dist * .5) % (H + 40) + H + 40) % (H + 40) - 20;
-    c.globalAlpha = .35 + .35 * Math.sin(t * 3 + k); c.fillStyle = fase === 2 ? '#e8c6ff' : '#e8fbff';
+    c.globalAlpha = .35 + .35 * Math.sin(t * 3 + k); c.fillStyle = corBrilho;
     c.beginPath(); c.moveTo(sx, sy - 4); c.lineTo(sx + 2, sy); c.lineTo(sx, sy + 4); c.lineTo(sx - 2, sy); c.fill();
   }
   c.globalAlpha = 1;
@@ -575,8 +648,9 @@ function fundo() {
 }
 
 function desenharNeve() {
-  c.fillStyle = fase === 2 ? '#e3c6ff' : '#ffffff';   // poeira de cristal na fase 2, neve na fase 1
-  for (const p of neve) { c.globalAlpha = p.a; c.beginPath(); c.arc(p.x, p.y, p.r, 0, 7); c.fill(); }
+  // neve na fase 1, poeira de cristal na fase 2, estrelinhas na fase 3
+  c.fillStyle = fase === 2 ? '#e3c6ff' : '#ffffff';
+  for (const p of neve) { c.globalAlpha = p.a; c.beginPath(); c.arc(p.x, p.y, fase === 3 ? p.r * .6 : p.r, 0, 7); c.fill(); }
   c.globalAlpha = 1;
 }
 
@@ -647,9 +721,10 @@ function desenhar() {
   c.globalAlpha = 1;
   desenharNeve();
 
-  // névoa branca da nevasca ou poeira do terremoto
+  // névoa branca da nevasca, poeira do terremoto ou brilho da chuva de estrelas
   if (nevasca) { c.fillStyle = 'rgba(225,242,255,.2)'; c.fillRect(0, 0, W, H); }
   if (terremoto) { c.fillStyle = 'rgba(150,100,180,.15)'; c.fillRect(0, 0, W, H); }
+  if (chuva) { c.fillStyle = 'rgba(255,255,255,.1)'; c.fillRect(0, 0, W, H); }
   // geada nos cantos da tela
   const v = c.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .75);
   v.addColorStop(0, 'rgba(200,240,255,0)'); v.addColorStop(1, 'rgba(200,240,255,.35)');
@@ -676,8 +751,8 @@ function hud() {
   texto('💎 ' + cristais, W - 14, 22, 11, '#7af6ff', 'right');
   texto('🥇 ' + ouro, W - 14, 42, 11, '#ffd23a', 'right');
   texto('FASE ' + fase, W / 2, 22, 10, '#ffe9a8');
-  if (fase === 2) texto('🧲 ' + imaCarga + ' [ESPAÇO]', W / 2, 42, 9, '#9ad8ff');
-  else texto('🔥 ' + derretidos, W / 2, 42, 10, '#ffb02a');
+  if (poder === 'ima') texto('🧲 ' + imaCarga + ' [Q]', W / 2, 42, 9, '#9ad8ff');
+  else texto('🔥 ' + derretidos + ' [Q]', W / 2, 42, 9, '#ffb02a');
   // barra de progresso
   const pr = clamp(dist / META, 0, 1);
   c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(W - 14, 60, 6, 124);
@@ -696,12 +771,14 @@ function telas() {
   }
   if (estado === 'inicio') {
     c.fillStyle = 'rgba(4,14,30,.65)'; c.fillRect(0, 0, W, H);
-    texto('FAGULHA', W / 2, 110, 30, '#ffe9a8');
-    texto('MINAS DE GELO E CRISTAL', W / 2, 156, 10, '#9ff0ff');
-    drawFagulha(c, W / 2, 300, .85, agora, { pose: 'stand', glow: '#ff8a2a' });
-    texto(toque ? '◀ ▶ MOVER   🔥 FOGO' : '← → MOVER   ESPAÇO = FOGO', W / 2, 448, 9, '#fff');
-    texto('FASE 1: CAVERNA DE GELO E OURO', W / 2, 472, 8, '#ffb02a');
-    texto('FASE 2: SEM FOGO! SÓ ÍMÃ 🧲 A CADA 30s', W / 2, 496, 7, '#9ad8ff');
+    texto('FAGULHA', W / 2, 100, 26, '#ffe9a8');
+    texto('GELO, CRISTAL E ESTRELAS', W / 2, 140, 9, '#9ff0ff');
+    drawFagulha(c, W / 2, 280, .78, agora, { pose: 'stand', glow: '#ff8a2a' });
+    texto(toque ? '◀▶ MOVER  🔥/🧲 ESPAÇO  🔁 TROCA' : '← → MOVER   ESPAÇO   Q = TROCA PODER', W / 2, 420, 7, '#fff');
+    texto('FASE 1: CAVERNA DE GELO E OURO', W / 2, 444, 7, '#ffb02a');
+    texto('FASE 2: MINAS DE CRISTAL + TERREMOTO', W / 2, 464, 7, '#9ad8ff');
+    texto('FASE 3: CAVERNA NO ESPAÇO + METEOROS', W / 2, 484, 7, '#cfd4ff');
+    texto('VENÇA SEM TOMAR DANO PRA UM TÍTULO ESPECIAL!', W / 2, 508, 6, '#ff9a6a');
     if (pisca) texto(toque ? 'TOQUE PARA JOGAR' : 'APERTE ESPAÇO', W / 2, 545, 14, '#fff');
   } else if (estado === 'gameover') {
     c.fillStyle = 'rgba(30,0,10,.75)'; c.fillRect(0, 0, W, H);
@@ -711,8 +788,10 @@ function telas() {
     if (pisca) texto(toque ? 'TOQUE: JOGAR DE NOVO' : 'ESPAÇO: JOGAR DE NOVO', W / 2, 400, 11, '#fff');
   } else if (estado === 'vitoria') {
     c.fillStyle = 'rgba(0,20,40,.75)'; c.fillRect(0, 0, W, H);
-    texto('SAIU DAS MINAS!', W / 2, 150, 18, '#9ff0ff');
-    drawFagulha(c, W / 2, 290, .9, agora, { pose: 'cheer', glow: '#ff8a2a' });
+    texto('VOCÊ VENCEU!', W / 2, 120, 20, '#9ff0ff');
+    texto(levouDano ? 'VOCÊ NÃO USA NEM METADE DO CÉREBRO' : 'VOCÊ É O FAMOSO IMORTAL',
+      W / 2, 160, levouDano ? 7 : 9, levouDano ? '#ff9a6a' : '#ffe9a8');
+    drawFagulha(c, W / 2, 300, .85, agora, { pose: 'cheer', glow: '#ff8a2a' });
     texto('💎 ' + cristais + '   🥇 ' + ouro + '   🔥 ' + derretidos, W / 2, 460, 12, '#ffe9a8');
     if (pisca) texto(toque ? 'TOQUE: JOGAR DE NOVO' : 'ESPAÇO: JOGAR DE NOVO', W / 2, 540, 11, '#fff');
   }
